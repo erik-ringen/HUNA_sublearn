@@ -1,14 +1,32 @@
 library(tidyverse)
 
 #############################################
-## Main dataset
-age <- read.csv("data-raw/age.csv", header=T)
+## Main datasets
+BaYaka_skills <- read.csv("data-raw/BaYaka_skills.csv", header=T)
+Hadza_skills <- read.csv("data-raw/Hadza_skills.csv", header=T)
 
-#Removing the free-list skills
-age <- subset( age, !(skill %in% c('X3.bow', 'X9.gun', 'X10.spear', 'X13.honey', 'X19.traps') ))
+names(BaYaka_skills)[1] <- "ID"
+names(Hadza_skills)[1] <- "sex"
+names(Hadza_skills)[ncol(Hadza_skills)] <- "ID"
 
-#Remvoing rank mean
-age <- age %>% select(-meanz)
+names(BaYaka_skills)[names(BaYaka_skills) == "X_X9.gun_hunting"] <- "X9.gun_hunting"
+
+# Wide to long
+BaYaka_skills <- BaYaka_skills %>% gather(key="skill", value="endorse", -c(ID, age, culture, sex))
+Hadza_skills <- Hadza_skills %>% gather(key="skill", value="endorse", -c(ID, age, culture, sex))
+
+# Filter skills we'll get from the explicit dataset
+BaYaka_skills <- BaYaka_skills %>% filter( substr(skill,1,1) == "X" )
+Hadza_skills <- Hadza_skills %>% filter( substr(skill,1,1) == "t" )
+
+# Removing appended categories
+BaYaka_skills$skill <- substr(BaYaka_skills$skill, 1, regexpr("_", BaYaka_skills$skill) - 1)
+
+Hadza_skills$skill <- substr(Hadza_skills$skill, regexpr("_", Hadza_skills$skill) + 1, nchar(Hadza_skills$skill))
+Hadza_skills$skill <- substr(Hadza_skills$skill, 1, regexpr("_", Hadza_skills$skill) - 1)
+
+# Combining Hadza and BaYaka datasets
+age <- bind_rows(Hadza_skills, BaYaka_skills)
 
 ## Rank datasets
 bfp <- read.csv("data-raw/BaYaka_forcedpair.csv", header=T)
@@ -18,9 +36,6 @@ hfp <- read.csv("data-raw/Hadza_forcedpair.csv", header=T)
 eB <- read.csv("data-raw/BaYaka_explicit.csv")
 names(eB)[1] <- "ID"
 
-# removing summary variables
-eB <- eB %>% select(-animal_sum, -plant_sum)
-
 # Converting to long-form
 eB_long <- eB %>% gather(key="species", value="endorse", -ID)
 
@@ -29,10 +44,8 @@ eB_long$skill <- ifelse(substr(eB_long$species, 1, 2) == "an", "B_animal", NA)
 eB_long$skill <- ifelse(substr(eB_long$species, 1, 2) == "pl", "B_plant", eB_long$skill)
 eB_long$skill <- ifelse(substr(eB_long$species, 1, 3) == "X18", "B_climbvine", eB_long$skill)
 eB_long$skill <- ifelse(substr(eB_long$species, 1, 2) == "X4", "B_basketvine", eB_long$skill)
-eB_long$skill <- ifelse(substr(eB_long$species, 1, 2) == "X9", "B_gunsum", eB_long$skill)
-eB_long$skill <- ifelse(substr(eB_long$species, 1, 3) == "X10", "B_spearsum", eB_long$skill)
-eB_long$skill <- ifelse(substr(eB_long$species, 1, 3) == "X19", "B_trapsum", eB_long$skill)
-eB_long$skill <- ifelse(substr(eB_long$species, 1, 3) == "X24", "B_honeysum", eB_long$skill)
+
+eB_long <- eB_long %>% filter( !(skill %in% c("B_climbvine", "B_basketvine")))
 
 table(eB_long$skill)
 
@@ -44,19 +57,11 @@ eB_long$plant <- ifelse(eB_long$skill == "B_plant", substr(eB_long$species, 9, n
 eH <- read.csv("data-raw/Hadza_explicit.csv")
 names(eH)[1] <- "ID"
 
-# removing summary variables
-eH <- eH %>% select(-animal_sum, -plant_sum)
-
-# Modifying Hadza ids to be consistent with other datasets
-eH$ID <- as.integer(paste0(1, eH$ID))
-
 # Converting to long-form
 eH_long <- eH %>% gather(key="species", value="endorse", -ID)
 
 eH_long$skill <- ifelse(substr(eH_long$species, 1, 2) == "an", "H_animal", NA)
 eH_long$skill <- ifelse(substr(eH_long$species, 1, 2) == "pl", "H_plant", eH_long$skill)
-eH_long$skill <- ifelse(substr(eH_long$species, 1, 2) == "X3", "H_bowsum", eH_long$skill)
-eH_long$skill <- ifelse(substr(eH_long$species, 1, 2) == "ho", "H_honeysum", eH_long$skill)
 
 # Species labels
 eH_long$animal <- ifelse(eH_long$skill == "H_animal", substr(eH_long$species, 10, nchar(eH_long$species)), NA)
@@ -91,18 +96,18 @@ from$skill <- substr(from$skill, 1, nchar(from$skill)-5)
 # Matching transmission method, path and transmitter sex to endorsement
 endorse_learn <- age
 
-endorse_learn$method <- by$method[match( interaction(age$skill,age$ID), interaction(by$skill,by$ID) )]
-endorse_learn$from <- from$Pathway[match( interaction(age$skill, age$ID), interaction(from$skill, from$ID))]
-endorse_learn$sex_pathway <- sex$sex_pathway[match( interaction(age$skill,age$ID), interaction(sex$skill,sex$ID) )]
-
 endorse_learn <- bind_rows(endorse_learn, eB_long)
 endorse_learn <- bind_rows(endorse_learn, eH_long)
+
+endorse_learn$method <- by$method[match( interaction(endorse_learn$skill,endorse_learn$ID), interaction(by$skill,by$ID) )]
+endorse_learn$from <- from$Pathway[match( interaction(endorse_learn$skill, endorse_learn$ID), interaction(from$skill, from$ID))]
+endorse_learn$sex_pathway <- sex$sex_pathway[match( interaction(endorse_learn$skill,endorse_learn$ID), interaction(sex$skill,sex$ID) )]
 
 # Renaming outcome
 endorse_learn <- endorse_learn %>% rename(y = endorse)
 
-# Removing extraneous species var
-endorse_learn <- endorse_learn %>% select(-species)
+# Removing extraneous species and skill var
+endorse_learn <- endorse_learn[,-which(names(endorse_learn) == "species")]
 
 ####### Wrangling rank data ######
 bfp_t <- t(bfp[,-ncol(bfp)])
