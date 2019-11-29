@@ -5,8 +5,9 @@ library(ggridges)
 # Read in subsistence skill data (tacit and explicit knoweldge) for both pops
 d <- read.csv("skill_data.csv", stringsAsFactors = F)
 
-#### Data dictionary ##############################################
+#### Data dictionary #############################################
 ## skill: subsistence domain, e.g., digging tuber
+## skill2: alt identifier for the explicit tasks
 ## ID: Participant identifier
 ## age: ethnographer estimated age
 ## sex: female = 0, male = 1
@@ -24,10 +25,10 @@ BaYaka_rank <- read.csv("BaYaka_rank_data.csv", stringsAsFactors = F)
 Hadza_rank <- read.csv("Hadza_rank_data.csv", stringsAsFactors = F)
 
 # Now, indicate whether the subsistence outcome is tacit or explicit
-d$expl <- ifelse(substr(d$skill, 1, 1) %in% c("B", "H"), 1, 0)
+d$expl <- ifelse(substr(d$skill, 1, 1) %in% c("B", "H") | d$skill %in% c("X4.basketvine", "X18.climbingvine"), 1, 0)
 
 # Indicate whether it subsistence outcome was a free-list
-d$freelist <- ifelse(d$skill %in% c("B_honeysum", "B_basketvine", "B_climbvine", "B_trapsum", "B_gunsum", "B_spearsum", "H_honeysum", "H_bowsum"), 1, 0)
+d$freelist <- ifelse(d$skill %in% c("X4.basketvine", "X18.climbingvine", "X19.traps", "X9.gun", "X10.spear", "X24.honey", "X3.bow", "X13.honey"), 1, 0)
 
 # Unique identifier for each freelist activity
 d$freelist_id <- match(d$skill, unique(d$skill[d$freelist == 1]))
@@ -48,8 +49,8 @@ N_plantB <- max(d_B$plant_id, na.rm=T)
 
 # Putting rank data in same order as skill index
 Bskills <- d_B %>% group_by(skill) %>% summarise(ind = mean(skill_id))
-Bskills <- Bskills[Bskills$ind < 20,]
-BaYaka_rank <- BaYaka_rank[,Bskills$skill]
+Bskills <- Bskills[Bskills$skill %in% colnames(BaYaka_rank),]
+BaYaka_rank <- BaYaka_rank[,Bskills$skill[order(Bskills$ind)]]
 
 N_BR <- nrow(BaYaka_rank)
 
@@ -75,8 +76,8 @@ N_plantH <- max(d_H$plant_id, na.rm=T)
 
 # Putting rank data in same order as skill index
 Hskills <- d_H %>% group_by(skill) %>% summarise(ind = mean(skill_id))
-Hskills <- Hskills[Hskills$ind < 13,]
-Hadza_rank <- Hadza_rank[,Hskills$skill]
+Hskills <- Hskills[Hskills$skill %in% colnames(Hadza_rank),]
+Hadza_rank <- Hadza_rank[,Hskills$skill[order(Hskills$ind)]]
 
 Hadza_rank <- Hadza_rank / max(Hadza_rank) # scale by max rank
 N_HR <- nrow(Hadza_rank)
@@ -160,8 +161,8 @@ m_sub <- stan_model( file="subsistence_model_lh.stan" )
 # fit_cor <- sampling( m_cor, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
 # fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
 
-# fit_cor <- readRDS("fit_cor.rds")
-# fit_m <- readRDS("fit_m.rds")
+fit_cor <- readRDS("fit_cor.rds")
+fit_m <- readRDS("fit_m.rds")
 
 # Checking mcmc diagnostics
 write.csv(precis(fit_m, depth=3), "model_precis.csv")
@@ -203,30 +204,30 @@ legend(x=0.4, y=0.3, legend=c("BaYaka Skill", "Hadza Skill"), lty="solid", col=c
 
 for (s in 1:N_skillH) {
   k <- exp(post$ak + post$skillH_v[,s,1])
-  b <- exp(post$ab + post$skillH_v[,s,1])
+  b <- exp(post$ab + post$skillH_v[,s,2])
   
   preds <- matrix(NA, nrow=length(post$lp__), ncol=length(age_seq))
   
-  for (i in 1:nrow(preds)) preds[i,] <- (1 - exp(-k[i]*age_seq)^b[i])
+  for (i in 1:nrow(preds)) preds[i,] <- (1 - exp(-k[i]*age_seq))^b[i]
   lines(x=age_seq, y=apply(preds,2,median), col=col.alpha("cornflowerblue", 0.8))
 }
 
 for (s in 1:N_skillB) {
   k <- exp(post$ak + post$skillB_v[,s,1])
-  b <- exp(post$ab + post$skillB_v[,s,1])
+  b <- exp(post$ab + post$skillB_v[,s,2])
   
   preds <- matrix(NA, nrow=length(post$lp__), ncol=length(age_seq))
   
-  for (i in 1:nrow(preds)) preds[i,] <- (1 - exp(-k[i]*age_seq)^b[i])
+  for (i in 1:nrow(preds)) preds[i,] <- (1 - exp(-k[i]*age_seq))^b[i]
   lines(x=age_seq, y=apply(preds,2,median), col=col.alpha("seagreen", 0.8))
 }
 dev.off()
 }
 
 ###### Variation acrss skills for different parameters ###
-sd_skillB <- post$sigma_skillB
-sd_skillH <- post$sigma_skillH
-colnames(sd_skillB) <- c("k", "b", "eta", "p", "p_male", "")
+#sd_skillB <- post$sigma_skillB
+#sd_skillH <- post$sigma_skillH
+#colnames(sd_skillB) <- c("k", "b", "eta", "p", "p_male", "")
 
 ###### Correlations between learning parameters ####
 cor_rankB <- post$Rho_skillB[,-11,11]
@@ -320,7 +321,7 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   
   if (culture == "Hadza") {
   skill_id <- Hskills[ Hskills$skill == skill , ]$ind
-  freelist <- ifelse( skill %in% c("H_honeysum", "H_bowsum"), 1, 0)
+  freelist <- ifelse( skill %in% c("X13.honey", "X3.bow"), 1, 0)
     
   k <- exp(post$ak + post$skillH_v[,skill_id,1])
   b <- exp(post$ab + post$skillH_v[,skill_id,2])
@@ -331,7 +332,7 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   
   if (culture == "BaYaka") {
     skill_id <- Bskills[ Bskills$skill == skill , ]$ind
-    freelist <- ifelse( skill %in% c("B_basketvine", "B_climbvine", "B_gunsum", "B_honeysum", "B_spearsum", "B_trapsum"), 1, 0)
+    freelist <- ifelse( skill %in% c("B_basketvine", "B_climbvine", "X9.gun", "B_honeysum", "X10.spear", "X19.traps"), 1, 0)
     
     k <- exp(post$ak + post$skillB_v[,skill_id,1])
     b <- exp(post$ab + post$skillB_v[,skill_id,2])
@@ -395,7 +396,6 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
 }
 ############# End plot predict function #####################
 #############################################################
-
 skill_plot(skill="B_animal", culture="BaYaka", sex="Male")
 
 ####### Plotting all BaYaka Skills ######
