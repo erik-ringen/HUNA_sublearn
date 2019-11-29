@@ -27,8 +27,8 @@ int transmission[N_obs];
 int sex_learn[N_obs];
 int sexcult[N_obs];
 
-real Hadza_rank[N_HR, N_skillH - 4]; // all skills minus unranked skills
-real BaYaka_rank[N_BR, N_skillB - 8];
+real Hadza_rank[N_HR, N_skillH - 2]; // all skills minus unranked skills
+real BaYaka_rank[N_BR, N_skillB - 5];
 
 real age_muH[N_H]; // mean Hadza age estimate
 real age_seH[N_H]; // sd Hadza age estimate
@@ -343,12 +343,12 @@ for (i in 1:N_obs) {
 //////////////////////////////////////////////////////////////
 /////////// Rank model ///////////////////////////
 for (n in 1:N_HR)
-for (s in 1:(N_skillH - 4)) {
+for (s in 1:(N_skillH - 2)) {
 Hadza_rank[n,s] ~ normal(a_HR + skillH_v[s,(8+K_paths)], sigma_HR );
 }
 
 for (n in 1:N_HR)
-for (s in 1:(N_skillB - 8)) {
+for (s in 1:(N_skillB - 5)) {
 BaYaka_rank[n,s] ~ normal(a_BR + skillB_v[s,(8+K_paths)], sigma_BR );
 }
 //////////////////////////////////////////////////////////////
