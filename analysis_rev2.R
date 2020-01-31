@@ -158,7 +158,7 @@ data_list <- list(
 
 #### Fitting stan model ####
 m_cor <- stan_model( file="subsistence_model_expl_cor.stan" )
-m_sub <- stan_model( file="subsistence_model_lh.stan" )
+m_sub <- stan_model( file="subsistence_model_lh_rescor.stan" )
 
 fit_cor <- sampling( m_cor, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
 fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
@@ -261,8 +261,11 @@ pred14_l <- pred14 %>% gather(key="skill", value="est")
 pred14_l$culture <- ifelse(pred14_l$skill %in% Bskills$skill2, "BaYaka", "Hadza")
 
 # Summarizing posterior predictions and plotting summaries
+pdf( "pred14.pdf", height=6, width=8.5, pointsize=12 )
+
 pred14_l %>% group_by(skill) %>% summarise(med=mean(est), lower=HPDI(est, prob=0.9)[1], upper=HPDI(est, prob=0.9)[2]) %>% mutate(culture=ifelse(skill %in% Bskills$skill2, "BaYaka", "Hadza")) %>% ggplot(aes(x=med,y=fct_reorder(skill, med))) + facet_wrap(~culture, scales="free_y") + geom_point(aes(color=culture), lwd=2) + geom_errorbarh(aes(xmin=lower, xmax=upper, color=culture), height=0, lwd=1) + scale_x_continuous(limits=c(0,1), labels=percent) + theme_bw(base_size=14) + xlab("Percent Knowledge at Age 14") + ylab("") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), legend.position = "none")
 
+dev.off()
 #### Transmission method results ####
 logsumexp <- function (x) {
   y = max(x)
@@ -464,6 +467,10 @@ cor_ranks_long$culture <- rep(c("BaYaka", "Hadza"), each=length(post$lp__)*10)
 round( median(cor_ranks_long$cor[cor_ranks_long$var == "p_male" & cor_ranks_long$culture == "Hadza"]) , 2)
 round( HPDI(cor_ranks_long$cor[cor_ranks_long$var == "p_male" & cor_ranks_long$culture == "Hadza"], prob=0.9) , 2)
 
+round(median(cor_ranks_long$cor[cor_ranks_long$var == "teach_learn" & cor_ranks_long$culture == "BaYaka"], prob=0.9),2)
+round(HPDI(cor_ranks_long$cor[cor_ranks_long$var == "teach_learn" & cor_ranks_long$culture == "BaYaka"], prob=0.9),2)
+
+
 ggplot(cor_ranks_long, aes(x=cor, y=var)) + geom_density_ridges2(aes( color=culture, fill=culture), alpha=0.5, scale=0.9, rel_min_height=0.01) + theme_bw(base_size = 16) + scale_y_discrete(expand = c(0, 0)) +
   scale_fill_manual(values=c("seagreen", "cornflowerblue")) +
   scale_color_manual(values=c(NA, NA)) +
@@ -547,6 +554,10 @@ pub_labels <- read_csv("figure_labels.csv")
 Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In figure`)]
 Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
 
+# Order for plotting
+Hskills$order <- as.numeric( substr(sub('\\..*', '', Hskills$skill2), 2, nchar(sub('\\..*', '', Hskills$skill2))) )
+Bskills$order <- as.numeric( substr(sub('\\..*', '', Bskills$skill2), 2, nchar(sub('\\..*', '', Bskills$skill2))) )
+
 both_skills <- bind_rows(Hskills, Bskills)
 
 # Age sequence to predict along, 1 = 80 years
@@ -588,8 +599,8 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   }
   
   for (j in 1:ncol(preds)) {
-    if (freelist == 0) preds[,j] <- 2 * ( logistic(exp( (1 - exp(-k*age_seq[j])^b )*eta + stem ) ) - 0.5 )
-    if (freelist == 1) preds[,j] <- exp( (1 - exp(-k*age_seq[j])^b )*eta + stem )
+    if (freelist == 0) preds[,j] <- 2 * ( logistic( ((1 - exp(-k*age_seq[j]))^b)^eta * exp(stem)) - 0.5 )
+    if (freelist == 1) preds[,j] <- ((1 - exp(-k*age_seq[j]))^b)^eta * exp(stem)
   }
   
   quants <- PI/4
@@ -644,6 +655,7 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
 skill_plot(skill="B_animal", culture="BaYaka", sex="Male")
 
 #### Plotting all BaYaka Skills #### 
+dev.off()
 pdf("BaYaka_skills_1.pdf", 
     width=8.5, 
     height=11, 
