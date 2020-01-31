@@ -46,10 +46,8 @@ real p_expl;
 matrix[2,N_H] idH_z; // individual variation
 matrix[2,N_B] idB_z;
 
-matrix[2,N_skillH] skillH_z;  // skill-specific variation
-matrix[2,N_skillB] skillB_z;
-
-matrix[1,max(sexcult)] sexcult_z; // random effects specific to sex*culture
+matrix[1,N_skillH] skillH_z;  // skill-specific variation
+matrix[1,N_skillB] skillB_z;
 
 matrix[1,N_plantH] plantH_z; // plant-specific variation in explicit knowledge
 matrix[1,N_plantB] plantB_z;
@@ -63,10 +61,8 @@ vector<lower=0>[max(freelist_id)] phi_free; // inverse dispersion parameter
 vector<lower=0>[2] sigma_idH;
 vector<lower=0>[2] sigma_idB;
 
-vector<lower=0>[2] sigma_skillH;
-vector<lower=0>[2] sigma_skillB;
-
-vector<lower=0>[1] sigma_sexcult;
+vector<lower=0>[1] sigma_skillH;
+vector<lower=0>[1] sigma_skillB;
 
 vector<lower=0>[1] sigma_plantH;
 vector<lower=0>[1] sigma_plantB;
@@ -74,8 +70,6 @@ vector<lower=0>[1] sigma_animalH;
 vector<lower=0>[1] sigma_animalB;
 
 // Correlations between parameters, cholesky decomposition
-cholesky_factor_corr[2] L_skillH;
-cholesky_factor_corr[2] L_skillB;
 cholesky_factor_corr[2] L_idH;
 cholesky_factor_corr[2] L_idB;
 }
@@ -84,27 +78,22 @@ transformed parameters{
 matrix[N_H,2] idH_v; // note the transposed dimensions
 matrix[N_B,2] idB_v;
 
-matrix[N_skillH,2] skillH_v;
-matrix[N_skillB,2] skillB_v;
+matrix[N_skillH,1] skillH_v;
+matrix[N_skillB,1] skillB_v;
 
 matrix[N_plantH,1] plantH_v;
 matrix[N_plantB,1] plantB_v;
 matrix[N_animalH,1] animalH_v;
 matrix[N_animalB,1] animalB_v;
 
-matrix[max(sexcult),1] sexcult_v;
-
 ///////////////////////////////////////////////////////////////////
 ///// Scaling and correlating random effects
 idH_v = (diag_pre_multiply(sigma_idH, L_idH) * idH_z)';
 idB_v = (diag_pre_multiply(sigma_idB, L_idB) * idB_z)';
 
-// Combining skill random effects for knowledge and rank data so that we can correlate them
-skillH_v = (diag_pre_multiply(sigma_skillH, L_skillH) * skillH_z)';
-skillB_v = (diag_pre_multiply(sigma_skillB, L_skillB) * skillB_z)';
-
 // The other random effects are not correlated across responses
-sexcult_v = (diag_matrix(sigma_sexcult) * sexcult_z)';
+skillH_v = (diag_matrix(sigma_skillH) * skillH_z)';
+skillB_v = (diag_matrix(sigma_skillB) * skillB_z)';
 plantH_v = (diag_matrix(sigma_plantH) * plantH_z)';
 plantB_v = (diag_matrix(sigma_plantB) * plantB_z)';
 animalH_v = (diag_matrix(sigma_animalH) * animalH_z)';
@@ -131,7 +120,6 @@ to_vector(idH_z) ~ normal(0,1);  // individual diff random effects, unscaled and
 to_vector(idB_z) ~ normal(0,1);
 to_vector(skillH_z) ~ normal(0,1); // skill diff random effects, unscaled and uncorrelated
 to_vector(skillB_z) ~ normal(0,1);
-to_vector(sexcult_z) ~ normal(0,1); // sex*culture differences
 to_vector(plantB_z) ~ normal(0,1);
 to_vector(plantH_z) ~ normal(0,1);
 to_vector(animalB_z) ~ normal(0,1);
@@ -142,7 +130,6 @@ sigma_idH ~ exponential(1);
 sigma_idB ~ exponential(1);
 sigma_skillH ~ exponential(1);
 sigma_skillB ~ exponential(1);
-sigma_sexcult ~ exponential(1);
 sigma_plantH ~ exponential(1);
 sigma_plantB ~ exponential(1);
 sigma_animalH ~ exponential(1);
@@ -150,8 +137,6 @@ sigma_animalB ~ exponential(1);
 
 L_idH ~ lkj_corr_cholesky(4);
 L_idB ~ lkj_corr_cholesky(4);
-L_skillH ~ lkj_corr_cholesky(4);
-L_skillB ~ lkj_corr_cholesky(4);
 
 // free-list parameters
 a_freelist ~ normal(0,1);
@@ -161,43 +146,37 @@ phi_free ~ exponential(1);
 for (i in 1:N_obs) {
 // Making linear model stems, culture and outcome specific /////
 {
-real l_stem = ap + p_expl*expl[i] + sexcult_v[sexcult[i],1];
+real l_stem = ap + p_expl*expl[i];
 
 if (Hadza[i] == 1) {
-  l_stem = l_stem + idH_v[id[i],1]*(1-expl[i]) + idH_v[id[i],2]*expl[i] + skillH_v[skill[i],1] + skillH_v[skill[i],2]*sex[i];
+  l_stem = l_stem + idH_v[id[i],1]*(1-expl[i]) + idH_v[id[i],2]*expl[i] + skillH_v[skill[i],1];
   
   if (plant_id[i] > 0) l_stem = l_stem + plantH_v[plant_id[i],1];
   if (animal_id[i] > 0) l_stem = l_stem + animalH_v[animal_id[i],1];
 }
 
 if (Hadza[i] == 0) {
-  l_stem = l_stem + idB_v[id[i],1]*(1-expl[i]) + idB_v[id[i],2]*expl[i] + skillB_v[skill[i],1] + skillB_v[skill[i],2]*sex[i];
+  l_stem = l_stem + idB_v[id[i],1]*(1-expl[i]) + idB_v[id[i],2]*expl[i] + skillB_v[skill[i],1];
   
   if (plant_id[i] > 0) l_stem = l_stem + plantB_v[plant_id[i],1];
   if (animal_id[i] > 0) l_stem = l_stem + animalB_v[animal_id[i],1];
 }
 
 if (freelist[i] == 1) l_stem = l_stem + a_freelist;
-
-mu[i] = l_stem;
 }
   ///// Likelihood functions /////////////////////////////////////
   if (freelist[i] == 0) y[i] ~ bernoulli( 2*(inv_logit( exp(mu[i]) ) - 0.5) );
-  if (freelist[i] == 1) y[i] ~ neg_binomial_2( exp(mu[i]), phi_free[freelist_id[i]]);
+  if (freelist[i] == 1) y[i] ~ neg_binomial_2( exp(mu[i] ), phi_free[freelist_id[i]]);
 }
 }
  // end model block
 
 generated quantities{
-  matrix[2,2] Rho_skillH;
   matrix[2,2] Rho_idH;
-  matrix[2,2] Rho_skillB;
   matrix[2,2] Rho_idB;
   
   // Recovering full correlation matrices
-  Rho_skillH = L_skillH * L_skillH';
   Rho_idH = L_idH * L_idH';
-  Rho_skillB = L_skillB * L_skillB';
   Rho_idB = L_idB * L_idB';
 }
 
