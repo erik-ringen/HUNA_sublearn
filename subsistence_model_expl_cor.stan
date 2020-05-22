@@ -163,10 +163,12 @@ if (Hadza[i] == 0) {
 }
 
 if (freelist[i] == 1) l_stem = l_stem + a_freelist;
+
+mu[i] = exp(l_stem);
 }
   ///// Likelihood functions /////////////////////////////////////
-  if (freelist[i] == 0) y[i] ~ bernoulli( 2*(inv_logit( exp(mu[i]) ) - 0.5) );
-  if (freelist[i] == 1) y[i] ~ neg_binomial_2( exp(mu[i] ), phi_free[freelist_id[i]]);
+  if (freelist[i] == 0) y[i] ~ bernoulli( 2*(inv_logit( mu[i] ) - 0.5) );
+  if (freelist[i] == 1) y[i] ~ neg_binomial_2( mu[i] , phi_free[freelist_id[i]]);
 }
 }
  // end model block
