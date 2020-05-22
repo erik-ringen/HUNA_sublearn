@@ -110,20 +110,20 @@ age_estH ~ normal(age_muH, age_seH);
 age_estB ~ normal(age_muB, age_seB);  
 
 ///// Priors //////////////////////////////////////////////
-ap ~ normal(0,1); // baseline probability of skill
+ap ~ std_normal(); // baseline probability of skill
 
 // effect of explicit vs tacit knowledge
-p_expl ~ normal(0,1);
+p_expl ~ std_normal();
 
 /// random effects ///////////
-to_vector(idH_z) ~ normal(0,1);  // individual diff random effects, unscaled and uncorelated
-to_vector(idB_z) ~ normal(0,1);
-to_vector(skillH_z) ~ normal(0,1); // skill diff random effects, unscaled and uncorrelated
-to_vector(skillB_z) ~ normal(0,1);
-to_vector(plantB_z) ~ normal(0,1);
-to_vector(plantH_z) ~ normal(0,1);
-to_vector(animalB_z) ~ normal(0,1);
-to_vector(animalH_z) ~ normal(0,1);
+to_vector(idH_z) ~ std_normal();  // individual diff random effects, unscaled and uncorelated
+to_vector(idB_z) ~ std_normal();
+to_vector(skillH_z) ~ std_normal(); // skill diff random effects, unscaled and uncorrelated
+to_vector(skillB_z) ~ std_normal();
+to_vector(plantB_z) ~ std_normal();
+to_vector(plantH_z) ~ std_normal();
+to_vector(animalB_z) ~ std_normal();
+to_vector(animalH_z) ~ std_normal();
 
 // scale parameters for random effects
 sigma_idH ~ exponential(1); 
@@ -139,7 +139,7 @@ L_idH ~ lkj_corr_cholesky(4);
 L_idB ~ lkj_corr_cholesky(4);
 
 // free-list parameters
-a_freelist ~ normal(0,1);
+a_freelist ~ std_normal();
 phi_free ~ exponential(1);
 
 ////////// Subsistence knowledge model /////////////////////////////

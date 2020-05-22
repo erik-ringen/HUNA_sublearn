@@ -179,49 +179,49 @@ age_estH ~ normal(age_muH, age_seH);
 age_estB ~ normal(age_muB, age_seB);  
 
 ///// Priors //////////////////////////////////////////////
-ap ~ normal(0,1); // baseline probability of pursuing skill
-ab ~ normal(0,1);
-ak ~ normal(0,1);
-ae ~ normal(0,1);
-am ~ normal(0,1);
-at ~ normal(0,1);
-as ~ normal(0,1);
+ap ~ std_normal(); // baseline probability of pursuing skill
+ab ~ std_normal();
+ak ~ std_normal();
+ae ~ std_normal();
+am ~ std_normal();
+at ~ std_normal();
+as ~ std_normal();
 
 // effect of explicit vs tacit knowledge
-p_expl ~ normal(0,1);
-e_expl ~ normal(0,1);
+p_expl ~ std_normal();
+e_expl ~ std_normal();
 
 // linear effects of age on transmission
-tH_age ~ normal(0,1);
-sH_age ~ normal(0,1);
-tB_age ~ normal(0,1);
-sB_age ~ normal(0,1);
-mH_age ~ normal(0,1);
-mB_age ~ normal(0,1);
-t2H_age ~ normal(0,1);
-s2H_age ~ normal(0,1);
-t2B_age ~ normal(0,1);
-s2B_age ~ normal(0,1);
-m2H_age ~ normal(0,1);
-m2B_age ~ normal(0,1);
+tH_age ~ std_normal();
+sH_age ~ std_normal();
+tB_age ~ std_normal();
+sB_age ~ std_normal();
+mH_age ~ std_normal();
+mB_age ~ std_normal();
+t2H_age ~ std_normal();
+s2H_age ~ std_normal();
+t2B_age ~ std_normal();
+s2B_age ~ std_normal();
+m2H_age ~ std_normal();
+m2B_age ~ std_normal();
 
-a_HR ~ normal(0,1);
-a_BR ~ normal(0,1);
+a_HR ~ std_normal();
+a_BR ~ std_normal();
 sigma_HR ~ exponential(1);
 sigma_BR ~ exponential(1);
 
 /// random effects ///////////
-to_vector(idH_z) ~ normal(0,1);  // individual diff random effects, unscaled and uncorelated
-to_vector(skillH_z) ~ normal(0,1); // skill diff random effects, unscaled and uncorrelated
-to_vector(idB_z) ~ normal(0,1);
-to_vector(skillB_z) ~ normal(0,1);
-to_vector(sexcult_z) ~ normal(0,1); // sex*culture differences
-to_vector(plantB_z) ~ normal(0,1);
-to_vector(plantH_z) ~ normal(0,1);
-to_vector(animalB_z) ~ normal(0,1);
-to_vector(animalH_z) ~ normal(0,1);
-to_vector(resH_z) ~ normal(0,1);
-to_vector(resB_z) ~ normal(0,1);
+to_vector(idH_z) ~ std_normal();  // individual diff random effects, unscaled and uncorelated
+to_vector(skillH_z) ~ std_normal(); // skill diff random effects, unscaled and uncorrelated
+to_vector(idB_z) ~ std_normal();
+to_vector(skillB_z) ~ std_normal();
+to_vector(sexcult_z) ~ std_normal(); // sex*culture differences
+to_vector(plantB_z) ~ std_normal();
+to_vector(plantH_z) ~ std_normal();
+to_vector(animalB_z) ~ std_normal();
+to_vector(animalH_z) ~ std_normal();
+to_vector(resH_z) ~ std_normal();
+to_vector(resB_z) ~ std_normal();
 
 // scale parameters for random effects
 sigma_idH ~ exponential(1); 
@@ -244,7 +244,7 @@ L_resH ~ lkj_corr_cholesky(4);
 L_resB ~ lkj_corr_cholesky(4);
 
 // free-list parameters
-a_freelist ~ normal(0,1);
+a_freelist ~ std_normal();
 phi_free ~ exponential(1);
 
 ////////// Subsistence knowledge model /////////////////////////////
