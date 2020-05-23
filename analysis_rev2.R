@@ -1,8 +1,8 @@
 library(tidyverse)
 library(scales)
-library(rethinking)
+library(rethinking) # https://github.com/rmcelreath/rethinking/
 library(ggridges)
-library(ggtern)
+library(viridis)
 
 # Read in subsistence skill data (tacit and explicit knoweldge) for both pops
 d <- read.csv("skill_data.csv", stringsAsFactors = F)
@@ -167,36 +167,100 @@ fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=2000
 # saveRDS(fit_cor, "fit_cor.rds")
 # saveRDS(fit_m, "fit_m.rds")
 
+#### Checking mcmc diagnostics ########################
+# write.csv(precis(fit_m, depth=3), "model_precis.csv")
+# prec <- read_csv("model_precis.csv")
+
+# prec %>% filter(Rhat4 > 1.05)
+
+#### Extract posterior samples #######################
 #fit_cor <- readRDS("fit_cor.rds")
 #fit_m <- readRDS("fit_m.rds")
 
-# Checking mcmc diagnostics
-write.csv(precis(fit_m, depth=3), "model_precis.csv")
-prec <- read_csv("model_precis.csv")
-
-prec %>% filter(Rhat > 1.01)
-
-# Extract posterior samples
 post <- extract.samples(fit_m)
 post_cor <- extract.samples(fit_cor)
 
-#### Plot life-course of knowledge ####
-library(viridis)
-library(SDMTools)
+#### Figure 2 #################################
+#### Plot prior K functions ###################
+b_seq <- rep( seq(from=0.01, to=3, length.out=100), 2 )
+k_seq <- rep( c(2,4), each = length(b_seq)/2 )
+age_seq <- seq(from=0, to=50, length.out = 100)
 
-b_seq <- seq(from=0.01, to=3, length.out=100)
-plot_cols <- viridis(100, option="A")
+K_pred <- data.frame( matrix(NA, nrow=length(b_seq), ncol=length(age_seq)) )
+colnames(K_pred) <- age_seq
 
-pdf( "lifecourse_example.pdf", height=6, width=6, pointsize=12)
-curve( (1 - exp(-2*x))^1, from=0, to=50/80 , ylim=c(0,1), col="white" , axes=F, xlab="Age", ylab="Variation Due to Age")
-
-axis(1, at=c(0,0.2,0.4,0.6,0.8,1), labels=80*c(0,0.2,0.4,0.6,0.8,1))
-axis(2, at=c(0,1), labels=c("Min", "Max"))
-for (i in 1:100) {
-  curve( (1 - exp(-2*x))^b_seq[i], from=0, to=50/80 , ylim=c(0,1), add=T, col=plot_cols[i])
+for (i in 1:nrow(K_pred)) {
+  K_pred[i,] <- (1 - exp(-k_seq[i]*age_seq/80))^b_seq[i]
 }
-legend.gradient(pnts=cbind( x=c(0.53,0.55,0.53,0.55), y=c(0, 0.2, 0, 0.2)), cols = plot_cols, c("0.01","3"),
-                title = "", cex=0.75)
+
+K_pred$k <- k_seq
+K_pred$b <- as.character(b_seq)
+
+K_long <- K_pred %>% pivot_longer(-c(b,k), names_to="Age")
+K_long$k <- ifelse(K_long$k == 2, "k = 2", "k = 4")
+K_long$b <- as.numeric(K_long$b)
+
+pdf( "Figure_2.pdf" , height=5, width=8.5, pointsize=12 )
+
+ggplot(K_long, aes(x=as.numeric(Age), y=value)) + facet_wrap(~k) + geom_line(aes(color=b,  group=as.character(b))) + scale_color_viridis(option="A") + scale_x_continuous(breaks=c(0,16,32,48)) + xlab("Age") + ylab("Variance Due to Age") + theme_bw(base_size=18) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(strip.background = element_rect(fill="white"))
+
+dev.off()
+#####################################################
+##### Figure 4 ######################################
+n_samps <- length(post$lp__) # number of posterior samples
+age_seq <- seq(from=0, to=50/80, length.out = 75)
+
+preds_B <- array( NA , dim=c(n_samps, N_skillB, length(age_seq)), dimnames=list( samps=1:n_samps, task=paste0("B",1:N_skillB), Age=age_seq*80  ) )
+preds_H <- array( NA , dim=c(n_samps, N_skillH, length(age_seq)), dimnames=list( samps=1:n_samps, task=paste0("H",1:N_skillH), Age=age_seq*80  ) )
+
+# BaYaka predictions
+for (s in 1:N_skillB) {
+  k_B <- exp(post$ak + post$skillB_v[,s,1])
+  b_B <- exp(post$ab + post$skillB_v[,s,2])
+  
+for (i in 1:n_samps) {
+  preds_B[i,s,] <- (1 - exp(-k_B[i]*age_seq))^b_B[i]
+}
+}
+
+# Hadza predictions
+for (s in 1:N_skillH) {
+  k_H <- exp(post$ak + post$skillH_v[,s,1])
+  b_H <- exp(post$ab + post$skillH_v[,s,2])
+  
+  for (i in 1:n_samps) {
+    preds_H[i,s,] <- (1 - exp(-k_H[i]*age_seq))^b_H[i]
+  }
+}
+
+# Convert arrays into long form
+preds_B_long <- preds_B %>%  as.tbl_cube(met_name = "est") %>% as_tibble
+preds_H_long <- preds_H %>% as.tbl_cube(met_name = "est") %>% as_tibble
+
+preds_both <- bind_rows(preds_B_long, preds_H_long)
+preds_both$culture <- c( rep("BaYaka", nrow(preds_B_long)), rep("Hadza", nrow(preds_H_long)) )
+
+preds_med <- preds_both %>% group_by(task, Age, culture) %>% summarise(med = median(est))
+
+
+med_S_plot <- ggplot(preds_med, aes(x=Age, y=med)) + geom_line(aes(color=culture, group=task)) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=18) + ylab("Variance Due to Age") + scale_x_continuous(breaks=c(0,16,32,48)) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(legend.position = c(0.8,0.37), legend.title = element_blank())
+
+#### Now, get correlations between rank and task acquisition parameters
+B_cor <- as.data.frame(post$Rho_skillB[,1:4,11])
+names(B_cor) <- c("rho[rank,k]","rho[rank,b]","rho[rank,eta]","rho[rank,alpha]")
+
+H_cor <- as.data.frame(post$Rho_skillH[,1:4,11])
+names(H_cor) <- <- c("rho[rank,k]","rho[rank,b]","rho[rank,eta]","rho[rank,alpha]")
+
+B_cor_long <- B_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
+H_cor_long <- H_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
+
+cor_both <- bind_rows(B_cor_long, H_cor_long)
+cor_both$culture <- c( rep("BaYaka", nrow(B_cor_long)), rep("Hadza", nrow(H_cor_long)) )
+
+ggplot(cor_both, aes(x=value)) + facet_wrap(~name, labeller = label_parsed) + geom_density(aes(color=culture, fill=culture), alpha=0.5) + geom_vline(xintercept = 0, linetype="dashed") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + scale_y_continuous(expand = c(0, 0)) + theme_bw(base_size = 18) + theme(legend.position = "none",axis.title.y=element_blank(),axis.text.y=element_blank(),axis.ticks.y=element_blank(), strip.background = element_rect(fill="white")) + xlab("Correlation") + scale_x_continuous(limits=c(-1,1))
+
+pdf( "Figure_4.pdf" , height=5, width=8.5, pointsize=12 )
 dev.off()
 
 # Knowledge plots for each skill
@@ -355,7 +419,11 @@ B_profiles$Sex <- ifelse(B_ID$sex == 1, "Male", "Female")
 both_profiles <- rbind(B_profiles, H_profiles)
 both_profiles$Culture <- c( rep("BaYaka", times=nrow(B_ID)),rep("Hadza", times=nrow(H_ID)) )
 
+library(ggtern)
+
 ggtern(both_profiles, mapping = aes(x = x, y = y, z = z)) + facet_wrap(~Culture) + geom_point(alpha=0.5, size=3, aes(color=Sex)) + tern_limits(T=1.05, L=1.05, R=1.05) + scale_color_manual(values=c("slategray", "orange")) + theme_bw(base_size=13) + xlab("Obs") + ylab("Teach") + zlab("Ind") + theme(strip.background = element_rect(fill="white", color="black"), tern.plot.background = element_rect(fill="white", color="black"))
+
+detach("package:ggtern", unload=TRUE)
 
 #### Transmision path results ####
 logsumexp <- function (x) {
