@@ -3,6 +3,7 @@ library(scales)
 library(rethinking) # https://github.com/rmcelreath/rethinking/
 library(ggridges)
 library(viridis)
+library(patchwork) # https://github.com/thomasp85/patchwork
 
 # Read in subsistence skill data (tacit and explicit knoweldge) for both pops
 d <- read.csv("skill_data.csv", stringsAsFactors = F)
@@ -200,12 +201,79 @@ K_long <- K_pred %>% pivot_longer(-c(b,k), names_to="Age")
 K_long$k <- ifelse(K_long$k == 2, "k = 2", "k = 4")
 K_long$b <- as.numeric(K_long$b)
 
-pdf( "Figure_2.pdf" , height=5, width=8.5, pointsize=12 )
+svg( "Figure_2.svg" , height=5, width=8.5, pointsize=12 )
 
 ggplot(K_long, aes(x=as.numeric(Age), y=value)) + facet_wrap(~k) + geom_line(aes(color=b,  group=as.character(b))) + scale_color_viridis(option="A") + scale_x_continuous(breaks=c(0,16,32,48)) + xlab("Age") + ylab("Variance Due to Age") + theme_bw(base_size=18) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(strip.background = element_rect(fill="white"))
 
 dev.off()
+##################################################
+
+###### Figure 3 ##################################
+#### Knowledge at age 14 ####
+# Organize skill data
+Hskills <- d_H %>% group_by(skill) %>% summarise(ind = mean(skill_id))
+Bskills <- d_B %>% group_by(skill) %>% summarise(ind = mean(skill_id))
+
+# Add publication-friendly labels
+pub_labels <- read_csv("figure_labels.csv")
+Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In figure`)]
+Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
+
+### Creating predictions at age 14 for each skill
+pred14 <- matrix(NA, nrow=length(post$lp__), ncol=(N_skillB + N_skillH))
+for ( j in 1:(N_skillB + N_skillH) ) {
+  if (j > N_skillB) {
+    k <- exp(post$ak + post$skillH_v[,(j - N_skillB),1])
+    b <- exp(post$ab + post$skillH_v[,(j - N_skillB),2])
+  }
+  else {
+    k <- exp(post$ak + post$skillB_v[,j,1])
+    b <- exp(post$ab + post$skillB_v[,j,2])
+  }
+  pred14[,j] <- (1 - exp(-k*(14/80)))^b
+}
+pred14 <- as.data.frame(pred14)
+colnames(pred14) <- c(Bskills$skill2[order(Bskills$ind)],Hskills$skill2[order(Hskills$ind)])
+# Converting wide to long
+pred14_l <- pred14 %>% gather(key="skill", value="est")
+pred14_l$culture <- ifelse(pred14_l$skill %in% Bskills$skill2, "BaYaka", "Hadza")
+
+# Summarizing posterior predictions and plotting summaries
+pred14_summary <- pred14_l %>% group_by(skill) %>% summarise(med=median(est), lower=HPDI(est, prob=0.9)[1], upper=HPDI(est, prob=0.9)[2]) %>% mutate(culture=ifelse(skill %in% Bskills$skill2, "BaYaka", "Hadza"))
+
+### Match up to rank data
+B_rank_median <- data.frame(task=colnames(BaYaka_rank), med_rank=apply(BaYaka_rank, 2, mean))
+H_rank_median <- data.frame(task=colnames(Hadza_rank), med_rank=apply(Hadza_rank, 2, mean))
+
+B_rank_median$skill <- pub_labels$`Change to`[match(B_rank_median$task, pub_labels$`In figure`)]
+H_rank_median$skill <- pub_labels$`Change to`[match(H_rank_median$task, pub_labels$`In figure`)]
+
+both_rank_median <- bind_rows(B_rank_median, H_rank_median) %>% mutate(culture = c( rep("BaYaka", nrow(B_rank_median)), rep("Hadza", nrow(H_rank_median)))) %>% select(skill, med_rank, culture)
+
+pred14_summary <- left_join(pred14_summary, both_rank_median)
+#pred14_summary <- pred14_summary %>% group_by(culture) %>% mutate(skill_ordered = fct_reorder(skill2, med_rank))
+
+svg( "figure_3.svg", height=6, width=7.5, pointsize=12 )
+
+# Need to re-factor within-culture
+pred14_summary %>% 
+  mutate(term = reorder(skill, med_rank)) %>%
+  group_by(culture, term) %>% 
+  arrange(desc(med_rank)) %>% 
+  ungroup() %>% 
+  mutate(term = factor(paste(term, culture, sep = "__"), 
+                       levels = rev(paste(term, culture, sep = "__")))) %>%
+  ggplot(aes(x=med,y=term)) + facet_wrap(~culture, scales="free_y") + 
+  geom_point(aes(color=culture), lwd=2) + geom_errorbarh(aes(xmin=lower, xmax=upper, color=culture), height=0, lwd=1) + 
+  scale_x_continuous(limits=c(0,1), labels=percent, breaks=c(0, 0.5, 1)) + 
+  theme_bw(base_size=14) + xlab("Percent Knowledge at Age 14") + ylab("") + 
+  scale_color_manual(values=c("seagreen", "cornflowerblue")) + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), legend.position = "none") + 
+  scale_y_discrete(labels = function(x) gsub("__.+$", "", x))
+
+dev.off()
 #####################################################
+
 ##### Figure 4 ######################################
 n_samps <- length(post$lp__) # number of posterior samples
 age_seq <- seq(from=0, to=50/80, length.out = 75)
@@ -243,14 +311,14 @@ preds_both$culture <- c( rep("BaYaka", nrow(preds_B_long)), rep("Hadza", nrow(pr
 preds_med <- preds_both %>% group_by(task, Age, culture) %>% summarise(med = median(est))
 
 
-med_S_plot <- ggplot(preds_med, aes(x=Age, y=med)) + geom_line(aes(color=culture, group=task)) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=18) + ylab("Variance Due to Age") + scale_x_continuous(breaks=c(0,16,32,48)) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(legend.position = c(0.8,0.37), legend.title = element_blank())
+med_S_plot <- ggplot(preds_med, aes(x=Age, y=med)) + geom_line(aes(color=culture, group=task)) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=18) + ylab("Variance Due to Age") + scale_x_continuous(breaks=c(0,16,32,48)) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(legend.position = "top", legend.title = element_blank()) + guides(color = guide_legend(override.aes = list(size = 2, title=NA)))
 
 #### Now, get correlations between rank and task acquisition parameters
 B_cor <- as.data.frame(post$Rho_skillB[,1:4,11])
-names(B_cor) <- c("rho[rank,k]","rho[rank,b]","rho[rank,eta]","rho[rank,alpha]")
+names(B_cor) <- c("rho(rank,k)","rho(rank,b)","rho(rank,eta)","rho(rank,alpha)")
 
 H_cor <- as.data.frame(post$Rho_skillH[,1:4,11])
-names(H_cor) <- <- c("rho[rank,k]","rho[rank,b]","rho[rank,eta]","rho[rank,alpha]")
+names(H_cor) <- c("rho(rank,k)","rho(rank,b)","rho(rank,eta)","rho(rank,alpha)")
 
 B_cor_long <- B_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
 H_cor_long <- H_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
@@ -258,78 +326,16 @@ H_cor_long <- H_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
 cor_both <- bind_rows(B_cor_long, H_cor_long)
 cor_both$culture <- c( rep("BaYaka", nrow(B_cor_long)), rep("Hadza", nrow(H_cor_long)) )
 
-ggplot(cor_both, aes(x=value)) + facet_wrap(~name, labeller = label_parsed) + geom_density(aes(color=culture, fill=culture), alpha=0.5) + geom_vline(xintercept = 0, linetype="dashed") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + scale_y_continuous(expand = c(0, 0)) + theme_bw(base_size = 18) + theme(legend.position = "none",axis.title.y=element_blank(),axis.text.y=element_blank(),axis.ticks.y=element_blank(), strip.background = element_rect(fill="white")) + xlab("Correlation") + scale_x_continuous(limits=c(-1,1))
+cor_both$name <- factor(cor_both$name, levels=c("rho(rank,k)","rho(rank,b)","rho(rank,eta)","rho(rank,alpha)"))
 
-pdf( "Figure_4.pdf" , height=5, width=8.5, pointsize=12 )
-dev.off()
+rank_cor_plot <- ggplot(cor_both, aes(x=value)) + facet_wrap(~name, labeller = label_parsed) + geom_density(aes(color=culture, fill=culture), alpha=0.5) + geom_vline(xintercept = 0, linetype="dashed") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + scale_y_continuous(expand = c(0, 0)) + theme_bw(base_size = 18) + theme(legend.position = "none",axis.title.y=element_blank(),axis.text.y=element_blank(),axis.ticks.y=element_blank(), strip.background = element_rect(fill="white")) + xlab("Correlation") + scale_x_continuous(breaks=c(-1,-0.5, 0, 0.5, 1), labels=c("-1", "-0.5", "0", "0.5", "1"))
 
-# Knowledge plots for each skill
-pdf( "lifecourse_skill.pdf", height=6, width=6, pointsize=12 )
-{
-  par(cex=1)
-  age_seq <- seq(from=0, to=50/80, length.out = 75)
-  plot(NULL, xlim=c(0,50/80), ylim=c(0,1), axes=F, xlab="Age", ylab="Variation Due to Age")
-  axis(1, at=c(0,0.2,0.4,0.6,0.8,1), labels=80*c(0,0.2,0.4,0.6,0.8,1))
-  axis(2, at=c(0,1), labels=c("Min", "Max"))
-  legend(x=0.4, y=0.3, legend=c("BaYaka Skill", "Hadza Skill"), lty="solid", col=c("seagreen", "cornflowerblue"), lwd=3, bty='n')
-  
-  for (s in 1:N_skillH) {
-    k <- exp(post$ak + post$skillH_v[,s,1])
-    b <- exp(post$ab + post$skillH_v[,s,2])
-    
-    preds <- matrix(NA, nrow=length(post$lp__), ncol=length(age_seq))
-    
-    for (i in 1:nrow(preds)) preds[i,] <- (1 - exp(-k[i]*age_seq))^b[i]
-    lines(x=age_seq, y=apply(preds,2,median), col=col.alpha("cornflowerblue", 0.8))
-  }
-  
-  for (s in 1:N_skillB) {
-    k <- exp(post$ak + post$skillB_v[,s,1])
-    b <- exp(post$ab + post$skillB_v[,s,2])
-    
-    preds <- matrix(NA, nrow=length(post$lp__), ncol=length(age_seq))
-    
-    for (i in 1:nrow(preds)) preds[i,] <- (1 - exp(-k[i]*age_seq))^b[i]
-    lines(x=age_seq, y=apply(preds,2,median), col=col.alpha("seagreen", 0.8))
-  }
-  dev.off()
-}
+svg( "Figure_4.svg" , height=6, width=8.5, pointsize=12 )
 
-#### Knowledge at age 14 ####
-# Organize skill data
-Hskills <- d_H %>% group_by(skill) %>% summarise(ind = mean(skill_id))
-Bskills <- d_B %>% group_by(skill) %>% summarise(ind = mean(skill_id))
-
-# Add publication-friendly labels
-pub_labels <- read_csv("figure_labels.csv")
-Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In figure`)]
-Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
-
-# Creating predictions at age 14 for each skill
-pred14 <- matrix(NA, nrow=length(post$lp__), ncol=(N_skillB + N_skillH))
-for ( j in 1:(N_skillB + N_skillH) ) {
-  if (j > N_skillB) {
-    k <- exp(post$ak + post$skillH_v[,(j - N_skillB),1])
-    b <- exp(post$ab + post$skillH_v[,(j - N_skillB),2])
-  }
-  else {
-    k <- exp(post$ak + post$skillB_v[,j,1])
-    b <- exp(post$ab + post$skillB_v[,j,2])
-  }
-  pred14[,j] <- (1 - exp(-k*(14/80)))^b
-}
-pred14 <- as.data.frame(pred14)
-colnames(pred14) <- c(Bskills$skill2[order(Bskills$ind)],Hskills$skill2[order(Hskills$ind)])
-# Converting wide to long
-pred14_l <- pred14 %>% gather(key="skill", value="est")
-pred14_l$culture <- ifelse(pred14_l$skill %in% Bskills$skill2, "BaYaka", "Hadza")
-
-# Summarizing posterior predictions and plotting summaries
-pdf( "pred14.pdf", height=6, width=8.5, pointsize=12 )
-
-pred14_l %>% group_by(skill) %>% summarise(med=mean(est), lower=HPDI(est, prob=0.9)[1], upper=HPDI(est, prob=0.9)[2]) %>% mutate(culture=ifelse(skill %in% Bskills$skill2, "BaYaka", "Hadza")) %>% ggplot(aes(x=med,y=fct_reorder(skill, med))) + facet_wrap(~culture, scales="free_y") + geom_point(aes(color=culture), lwd=2) + geom_errorbarh(aes(xmin=lower, xmax=upper, color=culture), height=0, lwd=1) + scale_x_continuous(limits=c(0,1), labels=percent) + theme_bw(base_size=14) + xlab("Percent Knowledge at Age 14") + ylab("") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), legend.position = "none")
+med_S_plot + rank_cor_plot
 
 dev.off()
+
 #### Transmission method results ####
 logsumexp <- function (x) {
   y = max(x)
@@ -544,7 +550,9 @@ ggplot(cor_ranks_long, aes(x=cor, y=var)) + geom_density_ridges2(aes( color=cult
   scale_color_manual(values=c(NA, NA)) +
   labs(fill="Culture", color="Culture") + ylab("") + xlab("Correlation with Skill Difficulty Ranking") + scale_x_continuous(limits=c(-1,1)) + geom_vline(xintercept = 0, lty="dashed", color="darkred", lwd=1)
 
-#### Sex-biased transmission results ####
+
+###### Figure 5 ####################################
+#### Sex-biased transmission results ###############
 pr_fB <- 1 - logistic(post$as + post$sexcult_v[,3,6])
 pr_mB <- 1 - logistic(post$as + post$sexcult_v[,4,6])
 pr_fH <- 1 - logistic(post$as + post$sexcult_v[,1,6])
@@ -558,18 +566,147 @@ trans_df <- data.frame(
   culture = c( rep("BaYaka", length(pr_fB)*2), rep("Hadza", length(pr_fB)*2), rep("BaYaka", length(pr_fB)), rep("Hadza", length(pr_fB)) )
 )
 
-pdf( "sexbias_trans1.pdf", height=5, width=8.5, pointsize=12 )
-ggplot(trans_df, aes(x=prob)) +
+#pdf( "sexbias_trans1.pdf", height=5, width=8.5, pointsize=12 )
+sexbias_1 <- ggplot(trans_df, aes(x=prob)) +
   facet_wrap(~culture) + geom_density(aes(color=learner_sex, fill=learner_sex, alpha=learner_sex, linetype=learner_sex)) +
-  theme_bw(base_size = 16) +
+  theme_bw(base_size = 15) +
   scale_y_discrete(expand = c(0, 0)) +
+  scale_x_continuous(breaks=c(0,0.5,1), labels=c("0", "0.5", "1")) +
   ylab("") + xlab("Probability of Female Transmission") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), strip.background = element_rect(fill="white", color="black")) +
   scale_fill_manual(values=c("darkred", "slategray", "orange")) +
   scale_color_manual(values=c("darkred", NA, NA)) +
   scale_alpha_manual(values=c(0, 0.6, 0.6)) +
   scale_linetype_manual(values=c("dashed", "solid", "solid")) + 
-  labs(fill="Learner Sex", color="Learner Sex", alpha="Learner Sex", linetype="Learner Sex")
+  labs(fill="Learner Sex", color="Learner Sex", alpha="Learner Sex", linetype="Learner Sex") +
+  ggtitle("a")
+
+## Now, break down by task #####
+
+# Prob female transmission
+pr_fB <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+pr_fH <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+
+# Task difficulty and task male-ness
+rank_B <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+alphaM_B <- alpha_B
+
+rank_H <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+alphaM_H <- alpha_H
+
+for (s in 1:N_skillB) {
+  pr_fB[,s] <- 1 - logistic( post$as + (post$sexcult_v[,3,6] + post$sexcult_v[,4,6])/2 +  post$skillB_v[,s,10]  )
+  rank_B[,s] <- post$skillB_v[,s,11]
+  alphaM_B[,s] <- post$skillB_v[,s,5]
+}
+
+for (s in 1:N_skillH) {
+pr_fH[,s] <- 1 - logistic( post$as + (post$sexcult_v[,1,6] + post$sexcult_v[,2,6])/2 +  post$skillH_v[,s,10]  )
+rank_H[,s] <- post$skillH_v[,s,11]
+alphaM_H[,s] <- post$skillH_v[,s,5]
+}
+
+## Summarize using median and 90% HPDI
+ft_df_B <- data.frame(
+  pr_f_med = apply(pr_fB, 2, median),
+  pr_f_lower = apply(pr_fB, 2, HPDI, prob=0.9)[1,],
+  pr_f_upper = apply(pr_fB, 2, HPDI, prob=0.9)[2,],
+  alphaM_med = apply(alphaM_B, 2, median),
+  alphaM_lower = apply(alphaM_B, 2, HPDI, prob=0.9)[1,],
+  alphaM_upper = apply(alphaM_B, 2, HPDI, prob=0.9)[2,],
+  rank_med = apply(rank_B, 2, median)
+)
+
+ft_df_H <- data.frame(
+  pr_f_med = apply(pr_fH, 2, median),
+  pr_f_lower = apply(pr_fH, 2, HPDI, prob=0.9)[1,],
+  pr_f_upper = apply(pr_fH, 2, HPDI, prob=0.9)[2,],
+  alphaM_med = apply(alphaM_H, 2, median),
+  alphaM_lower = apply(alphaM_H, 2, HPDI, prob=0.9)[1,],
+  alphaM_upper = apply(alphaM_H, 2, HPDI, prob=0.9)[2,],
+  rank_med = apply(rank_H, 2, median)
+)
+
+ft_df_B$rank_med <- (ft_df_B$rank_med / max(ft_df_B$rank_med))
+ft_df_H$rank_med <-  (ft_df_H$rank_med / max(ft_df_H$rank_med)) 
+
+both_ft <- bind_rows(ft_df_B, ft_df_H) %>% mutate(culture = c( rep("BaYaka", nrow(ft_df_B)), rep("Hadza", nrow(ft_df_H))) )
+
+skill_sex <- ggplot(data=both_ft, aes(color=culture, size=rank_med - min(rank_med))) +
+  facet_wrap(~culture) + 
+  geom_point(aes(y=pr_f_med, x=alphaM_med), alpha=0.5) + 
+  theme_bw(base_size=15) + 
+  ylab("Probability of Female Transmission") + 
+  xlab("") + 
+  geom_vline(xintercept = 0, linetype="dashed") + 
+  geom_hline(yintercept = 0.5, linetype="dashed") + 
+  scale_color_manual(values=c("seagreen", "cornflowerblue"), guide=F) + 
+  scale_x_continuous(breaks=c(-3, 3), labels=c("Female-Biased \nTasks", "Male-Biased \nTasks")) + 
+  scale_y_continuous(breaks=c(0,0.5,1), labels=c("0", "0.5", "1")) +
+  scale_size_area(name = "Task Ranking", breaks=c(1,2), labels=c("Less Difficult", "More Difficult")) + 
+  theme(legend.title = element_text(),  strip.background = element_blank(),strip.text.x = element_blank()) + 
+  ggtitle("b")
+
+svg("Figure_5.svg", height=8, width=8, pointsize = 12)
+
+sexbias_1 / skill_sex
+
+dev.off()
+###################################################################
+# Now, bring in sex-specific ranking data
+B_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 1)
+H_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 2)
+
+# Wrangle into long
+B <- as.data.frame(t(B_sex[-1,]), stringsAsFactors = F)[-1,]
+colnames(B) <- unlist(B_sex[-1,1])
+B$sex <- as.character(B_sex[1,-1])
+B$rater <- paste0("B",1:nrow(B))
+
+B_long <- B %>% pivot_longer(-c(rater, sex))
+B_long$culture <- "BaYaka"
+
+H <- as.data.frame(t(H_sex[-1,]), stringsAsFactors = F)[-1,]
+colnames(H) <- unlist(H_sex[-1,1])
+H$sex <- as.character(H_sex[1,-1])
+H$rater <- paste0("H",1:nrow(H))
+
+H_long <- H %>% pivot_longer(-c(rater, sex))
+H_long$culture <- "Hadza"
+
+# Bring them together, give tasks better labels
+rating_long <- bind_rows(B_long, H_long)
+pub_labels <- read_csv("figure_labels.csv")
+rating_long$task <- pub_labels$`Change to`[match(rating_long$name, pub_labels$`In figure`)]
+rating_long$value <- as.numeric(rating_long$value)
+
+# med by culture and sex
+rating_summary <- rating_long %>% group_by(culture, sex, task) %>% summarise(value = median((value)))
+
+svg( file="Supp_sex_rank.svg", width=8.5, height=9, pointsize=12 )
+
+ggplot(rating_long, aes(x=fct_reorder(task,value), y=value, color=sex, group=1)) + facet_wrap(~culture, scales="free") + geom_jitter(width=0, alpha=0.35) + stat_summary(aes(y=value, group=sex), fun="mean", geom="line", lwd=1) + coord_flip() + ylab("Difficulty Ranking") + xlab("") + theme_bw(base_size=15) + scale_color_manual(values=c("slategray", "orange")) + theme(strip.background = element_rect(fill="white"))
+
+dev.off()
+############################################################
+
+#######
+B_cor <- as.data.frame(post$Rho_skillB[,1:4,11])
+names(B_cor) <- c("rho(rank,k)","rho(rank,b)","rho(rank,eta)","rho(rank,alpha)")
+
+H_cor <- as.data.frame(post$Rho_skillH[,1:4,11])
+names(H_cor) <- c("rho(rank,k)","rho(rank,b)","rho(rank,eta)","rho(rank,alpha)")
+
+B_cor_long <- B_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
+H_cor_long <- H_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
+
+cor_both <- bind_rows(B_cor_long, H_cor_long)
+cor_both$culture <- c( rep("BaYaka", nrow(B_cor_long)), rep("Hadza", nrow(H_cor_long)) )
+
+
+
+
+
 dev.off()
 
 #### Explicit and tacit knowledge cor results #### 
@@ -657,7 +794,7 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   
   if (culture == "BaYaka") {
     skill_id <- Bskills[ Bskills$skill == skill , ]$ind
-    freelist <- ifelse( skill %in% c("B_basketvine", "B_climbvine", "X9.gun", "B_honeysum", "X10.spear", "X19.traps"), 1, 0)
+    freelist <- ifelse( skill %in% c("B_basketvine", "B_climbvine", "X9.gun", "X24.honey", "X10.spear", "X19.traps"), 1, 0)
     
     k <- exp(post$ak + post$skillB_v[,skill_id,1])
     b <- exp(post$ab + post$skillB_v[,skill_id,2])
