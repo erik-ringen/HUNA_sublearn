@@ -203,7 +203,7 @@ K_long$b <- as.numeric(K_long$b)
 
 svg( "Figure_2.svg" , height=5, width=8.5, pointsize=12 )
 
-ggplot(K_long, aes(x=as.numeric(Age), y=value)) + facet_wrap(~k) + geom_line(aes(color=b,  group=as.character(b))) + scale_color_viridis(option="A") + scale_x_continuous(breaks=c(0,16,32,48)) + xlab("Age") + ylab("Variance Due to Age") + theme_bw(base_size=18) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(strip.background = element_rect(fill="white"))
+ggplot(K_long, aes(x=as.numeric(Age), y=value)) + facet_wrap(~k) + geom_line(aes(color=b,  group=as.character(b))) + scale_color_viridis(option="A") + scale_x_continuous(breaks=c(0,16,32,48)) + xlab("Age") + ylab("Age-Structured Knowledge") + theme_bw(base_size=18) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(strip.background = element_rect(fill="white"))
 
 dev.off()
 ##################################################
@@ -311,7 +311,7 @@ preds_both$culture <- c( rep("BaYaka", nrow(preds_B_long)), rep("Hadza", nrow(pr
 preds_med <- preds_both %>% group_by(task, Age, culture) %>% summarise(med = median(est))
 
 
-med_S_plot <- ggplot(preds_med, aes(x=Age, y=med)) + geom_line(aes(color=culture, group=task)) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=18) + ylab("Variance Due to Age") + scale_x_continuous(breaks=c(0,16,32,48)) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(legend.position = "top", legend.title = element_blank()) + guides(color = guide_legend(override.aes = list(size = 2, title=NA)))
+med_S_plot <- ggplot(preds_med, aes(x=Age, y=med)) + geom_line(aes(color=culture, group=task)) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=18) + ylab("Age-Structured Knowledge") + scale_x_continuous(breaks=c(0,16,32,48)) + scale_y_continuous(breaks=c(0,1), labels=c("Min", "Max")) + theme(legend.position = "top", legend.title = element_blank()) + guides(color = guide_legend(override.aes = list(size = 2, title=NA)))
 
 #### Now, get correlations between rank and task acquisition parameters
 B_cor <- as.data.frame(post$Rho_skillB[,1:4,11])
@@ -652,45 +652,8 @@ svg("Figure_5.svg", height=8, width=8, pointsize = 12)
 sexbias_1 / skill_sex
 
 dev.off()
-###################################################################
-# Now, bring in sex-specific ranking data
-B_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 1)
-H_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 2)
-
-# Wrangle into long
-B <- as.data.frame(t(B_sex[-1,]), stringsAsFactors = F)[-1,]
-colnames(B) <- unlist(B_sex[-1,1])
-B$sex <- as.character(B_sex[1,-1])
-B$rater <- paste0("B",1:nrow(B))
-
-B_long <- B %>% pivot_longer(-c(rater, sex))
-B_long$culture <- "BaYaka"
-
-H <- as.data.frame(t(H_sex[-1,]), stringsAsFactors = F)[-1,]
-colnames(H) <- unlist(H_sex[-1,1])
-H$sex <- as.character(H_sex[1,-1])
-H$rater <- paste0("H",1:nrow(H))
-
-H_long <- H %>% pivot_longer(-c(rater, sex))
-H_long$culture <- "Hadza"
-
-# Bring them together, give tasks better labels
-rating_long <- bind_rows(B_long, H_long)
-pub_labels <- read_csv("figure_labels.csv")
-rating_long$task <- pub_labels$`Change to`[match(rating_long$name, pub_labels$`In figure`)]
-rating_long$value <- as.numeric(rating_long$value)
-
-# med by culture and sex
-rating_summary <- rating_long %>% group_by(culture, sex, task) %>% summarise(value = median((value)))
-
-svg( file="Supp_sex_rank.svg", width=8.5, height=9, pointsize=12 )
-
-ggplot(rating_long, aes(x=fct_reorder(task,value), y=value, color=sex, group=1)) + facet_wrap(~culture, scales="free") + geom_jitter(width=0, alpha=0.35) + stat_summary(aes(y=value, group=sex), fun="mean", geom="line", lwd=1) + coord_flip() + ylab("Difficulty Ranking") + xlab("") + theme_bw(base_size=15) + scale_color_manual(values=c("slategray", "orange")) + theme(strip.background = element_rect(fill="white"))
-
-dev.off()
-############################################################
-
-#######
+########################################################
+###### Figure 6 ################################
 B_cor <- as.data.frame(post$Rho_skillB[,1:4,11])
 names(B_cor) <- c("rho(rank,k)","rho(rank,b)","rho(rank,eta)","rho(rank,alpha)")
 
@@ -702,12 +665,6 @@ H_cor_long <- H_cor %>% mutate(samp=1:n_samps) %>% pivot_longer(-samp)
 
 cor_both <- bind_rows(B_cor_long, H_cor_long)
 cor_both$culture <- c( rep("BaYaka", nrow(B_cor_long)), rep("Hadza", nrow(H_cor_long)) )
-
-
-
-
-
-dev.off()
 
 #### Explicit and tacit knowledge cor results #### 
 # Extract posterior samples
@@ -733,20 +690,21 @@ round(HPDI(id_cor$cor[id_cor$model == "Residual Correlation" & id_cor$culture ==
 round(median(id_cor$cor[id_cor$model == "Residual Correlation" & id_cor$culture == "Hadza"]),2)
 round(HPDI(id_cor$cor[id_cor$model == "Residual Correlation" & id_cor$culture == "Hadza"], prob=0.9),2)
 
-
 # Plotting densities
-pdf( "id_cor.pdf", height=5, width=8.5, pointsize=12 )
+svg( "Figure_6.svg", height=5, width=8.5, pointsize=12 )
 ggplot(id_cor, aes(x=cor)) +
   facet_wrap(~model) + geom_density(aes(color=culture, fill=culture), alpha=0.5) +
   theme_bw(base_size = 16) +
   scale_y_discrete(expand = c(0, 0)) +
-  ylab("") + xlab("Correlation Among Individuals Tacit and Explicit") +
+  ylab("") + xlab("Correlation Within Individuals, Tacit and Explicit Task Performance") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), strip.background = element_rect(fill="white", color="black")) +
   scale_x_continuous(limits=c(-1,1)) +
   scale_fill_manual(values=c("seagreen", "cornflowerblue")) +
   scale_color_manual(values=c("seagreen", "cornflowerblue")) + 
   labs(fill="Culture", color="Culture") + geom_vline(xintercept = 0, linetype="dashed", lwd=1, color="darkred")
 dev.off()
+############################################
+##### Supplementary Plots ##################
 
 #### Pace-of-learning plots #### 
 post <- extract.samples(fit_m)
@@ -873,7 +831,7 @@ for (s in 1:9) {
 }
 dev.off()
 
-pdf("BaYaka_skills_2.pdf", 
+svg("BaYaka_skills_2.pdf", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -885,7 +843,7 @@ for (s in 10:18) {
 }
 dev.off()
 
-pdf("BaYaka_skills_3.pdf", 
+svg("BaYaka_skills_3.pdf", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -898,7 +856,7 @@ for (s in 19:27) {
 dev.off()
 
 #### Plotting all Hadza Skills #### 
-pdf("Hadza_skills_1.pdf", 
+svg("Hadza_skills_1.pdf", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -911,7 +869,7 @@ for (s in 1:9) {
 }
 dev.off()
 
-pdf("Hadza_skills_2.pdf", 
+svg("Hadza_skills_2.pdf", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -923,10 +881,47 @@ for (s in 10:nrow(Hskills)) {
   skill_plot(skill=Hskills$skill[s], culture="Hadza", sex="Female", color="slategray", add=T, quantiles = T)
 }
 dev.off()
+#####################################################
+#####################################################
 
+# Now, bring in sex-specific ranking data
+B_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 1)
+H_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 2)
 
+# Wrangle into long
+B <- as.data.frame(t(B_sex[-1,]), stringsAsFactors = F)[-1,]
+colnames(B) <- unlist(B_sex[-1,1])
+B$sex <- as.character(B_sex[1,-1])
+B$rater <- paste0("B",1:nrow(B))
+
+B_long <- B %>% pivot_longer(-c(rater, sex))
+B_long$culture <- "BaYaka"
+
+H <- as.data.frame(t(H_sex[-1,]), stringsAsFactors = F)[-1,]
+colnames(H) <- unlist(H_sex[-1,1])
+H$sex <- as.character(H_sex[1,-1])
+H$rater <- paste0("H",1:nrow(H))
+
+H_long <- H %>% pivot_longer(-c(rater, sex))
+H_long$culture <- "Hadza"
+
+# Bring them together, give tasks better labels
+rating_long <- bind_rows(B_long, H_long)
+pub_labels <- read_csv("figure_labels.csv")
+rating_long$task <- pub_labels$`Change to`[match(rating_long$name, pub_labels$`In figure`)]
+rating_long$value <- as.numeric(rating_long$value)
+
+# med by culture and sex
+rating_summary <- rating_long %>% group_by(culture, sex, task) %>% summarise(value = median((value)))
+
+svg( file="Supp_sex_rank.svg", width=8.5, height=9, pointsize=12 )
+
+ggplot(rating_long, aes(x=fct_reorder(task,value), y=value, color=sex, group=1)) + facet_wrap(~culture, scales="free") + geom_jitter(width=0, alpha=0.35) + stat_summary(aes(y=value, group=sex), fun="mean", geom="line", lwd=1) + coord_flip() + ylab("Difficulty Ranking") + xlab("") + theme_bw(base_size=15) + scale_color_manual(values=c("slategray", "orange")) + theme(strip.background = element_rect(fill="white"))
+
+dev.off()
+########################################################
+######## Figure 1 ########################
 ## Plotting correlated random effects ####
-library(cowplot)
 post <- extract.samples(fit_m)
 
 ## ranks
@@ -967,17 +962,17 @@ BaYaka_long <- BaYaka_rank %>% gather(key="task", value="rank")
 both_rank <- bind_rows(Hadza_long, BaYaka_long)
 both_rank$culture <- c( rep("Hadza", nrow(Hadza_long)), rep("BaYaka", nrow(BaYaka_long)) )
 
-rank_plot <- both_rank %>% ggplot(aes(x=rank, y=task, color=culture, fill=culture)) + facet_wrap(~culture, scales="free_y") + geom_density_ridges(stat="binline", bins=10, scale=0.9) + theme_bw(base_size=15) + theme(legend.position = "none", axis.ticks.y=element_blank(), axis.text.y=element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), axis.ticks.x=element_blank(), axis.text.x=element_blank(),panel.spacing = unit(2, "lines")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + ylab("Subsistence Task") + xlab("Difficulty Ranking")
+rank_plot <- both_rank %>% ggplot(aes(x=rank, y=task, color=culture, fill=culture)) + facet_wrap(~culture, scales="free_y") + geom_density_ridges(stat="binline", bins=10, scale=0.9) + theme_bw(base_size=15) + theme(legend.position = "none", axis.ticks.y=element_blank(), axis.text.y=element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), axis.ticks.x=element_blank(), axis.text.x=element_blank(),panel.spacing = unit(2, "lines")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + ylab("Subsistence Task") + xlab("Difficulty Ranking") + ggtitle("Study Data")
 
 endorse_plot <- d %>% filter(freelist == 0) %>% select(y, skill, culture) %>% group_by(skill, culture) %>% summarise(prop=sum(y)/n()) %>% ggplot(aes(x=prop, y=skill, color=culture)) + facet_wrap(~culture, scales="free") + geom_point() + xlab("Proportion of Endorsements") + ylab("Subsistence Task") + theme_bw(base_size=15) + theme(legend.position = "none", axis.ticks.y=element_blank(), axis.text.y=element_blank(),strip.background = element_rect(fill="white", color="black"), axis.ticks.x=element_blank(), panel.spacing = unit(2, "lines")) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_x_continuous(limits=c(0,1), breaks=c(0,0.5,1))
 
-re_plot <- ggplot(re_sum, aes(x=median_a, y=median_rank, color=culture)) + geom_point() + geom_errorbarh(aes(xmin=lower_a, xmax=upper_a), alpha=0.3) + geom_errorbar(aes(ymin=lower_rank, ymax=upper_rank), alpha=0.3) + theme_bw(base_size=15) + ylab(expression(alpha["skill,rank"])) + xlab(expression(alpha["skill,knowledge"])) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") + stat_ellipse(type = "norm", linetype = 2) + scale_color_manual(values=c("seagreen", "cornflowerblue"))
-
+re_plot <- ggplot(re_sum, aes(x=median_a, y=median_rank, color=culture)) + geom_point() + geom_errorbarh(aes(xmin=lower_a, xmax=upper_a), alpha=0.3) + geom_errorbar(aes(ymin=lower_rank, ymax=upper_rank), alpha=0.3) + theme_bw(base_size=15) + ylab(expression(alpha["task,rank"])) + xlab(expression(alpha["task,knowledge"])) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") + stat_ellipse(type = "norm", linetype = 2) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + ggtitle("Model Parameters")
+ 
 # correlations between rank and a
-rho_plot <- data.frame(est=c(post$Rho_skillB[,4,11], post$Rho_skillH[,4,11]), Culture = c(rep("BaYaka", length(post$lp__)), rep("Hadza", length(post$lp__)))) %>% ggplot(aes(x=est,color=Culture, fill=Culture)) + geom_density(alpha=0.5) + scale_y_discrete(expand = c(0, 0)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=15) + xlab(expression(paste("Correlation (",rho, ")"))) + ylab("")
+rho_plot <- data.frame(est=c(post$Rho_skillB[,4,11], post$Rho_skillH[,4,11]), Culture = c(rep("BaYaka", length(post$lp__)), rep("Hadza", length(post$lp__)))) %>% ggplot(aes(x=est,color=Culture, fill=Culture)) + geom_density(alpha=0.5) + scale_y_discrete(expand = c(0, 0)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=15) + xlab(expression(paste("Correlation (",rho, ")"))) + ylab("") + ggtitle("Correlations Between Parameters")
 
+svg("Figure_1.svg",  height=6, width=7.5, pointsize=12)
+(rank_plot + re_plot) / (endorse_plot + rho_plot)
 
-plot_grid(
-  rank_plot, re_plot, endorse_plot, rho_plot,
-  labels = "", ncol = 2, scale=0.8
-)
+dev.off()
+
