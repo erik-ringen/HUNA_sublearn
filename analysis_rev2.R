@@ -181,6 +181,17 @@ fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=2000
 post <- extract.samples(fit_m)
 post_cor <- extract.samples(fit_cor)
 
+n_samps <- length(post$lp__)
+
+# Organize skill data
+Hskills <- d_H %>% group_by(skill) %>% summarise(ind = mean(skill_id))
+Bskills <- d_B %>% group_by(skill) %>% summarise(ind = mean(skill_id))
+
+# Add publication-friendly labels
+pub_labels <- read_csv("figure_labels.csv")
+Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In figure`)]
+Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
+
 #### Figure 2 #################################
 #### Plot prior K functions ###################
 b_seq <- rep( seq(from=0.01, to=3, length.out=100), 2 )
@@ -210,14 +221,6 @@ dev.off()
 
 ###### Figure 3 ##################################
 #### Knowledge at age 14 ####
-# Organize skill data
-Hskills <- d_H %>% group_by(skill) %>% summarise(ind = mean(skill_id))
-Bskills <- d_B %>% group_by(skill) %>% summarise(ind = mean(skill_id))
-
-# Add publication-friendly labels
-pub_labels <- read_csv("figure_labels.csv")
-Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In figure`)]
-Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
 
 ### Creating predictions at age 14 for each skill
 pred14 <- matrix(NA, nrow=length(post$lp__), ncol=(N_skillB + N_skillH))
@@ -251,7 +254,6 @@ H_rank_median$skill <- pub_labels$`Change to`[match(H_rank_median$task, pub_labe
 both_rank_median <- bind_rows(B_rank_median, H_rank_median) %>% mutate(culture = c( rep("BaYaka", nrow(B_rank_median)), rep("Hadza", nrow(H_rank_median)))) %>% select(skill, med_rank, culture)
 
 pred14_summary <- left_join(pred14_summary, both_rank_median)
-#pred14_summary <- pred14_summary %>% group_by(culture) %>% mutate(skill_ordered = fct_reorder(skill2, med_rank))
 
 svg( "figure_3.svg", height=6, width=7.5, pointsize=12 )
 
@@ -523,7 +525,11 @@ B_profiles$Sex <- ifelse(B_ID$sex == 1, "Male", "Female")
 both_profiles <- rbind(B_profiles, H_profiles)
 both_profiles$Culture <- c( rep("BaYaka", times=nrow(B_ID)),rep("Hadza", times=nrow(H_ID)) )
 
+library(ggtern)
+
 ggtern(both_profiles, mapping = aes(x = x, y = y, z = z)) + facet_wrap(~Culture) + geom_point(alpha=0.5, size=3, aes(color=Sex)) + tern_limits(T=1.05, L=1.05, R=1.05) + scale_color_manual(values=c("slategray", "orange")) + theme_bw(base_size=13) + xlab("Hor") + ylab("Obl") + zlab("Ver") + theme(strip.background = element_rect(fill="white", color="black"), tern.plot.background = element_rect(fill="white", color="black"))
+
+detach("package:ggtern", unload=TRUE)
 
 #### Correlations between learning parameters ####
 cor_rankB <- post$Rho_skillB[,-11,11]
@@ -566,7 +572,6 @@ trans_df <- data.frame(
   culture = c( rep("BaYaka", length(pr_fB)*2), rep("Hadza", length(pr_fB)*2), rep("BaYaka", length(pr_fB)), rep("Hadza", length(pr_fB)) )
 )
 
-#pdf( "sexbias_trans1.pdf", height=5, width=8.5, pointsize=12 )
 sexbias_1 <- ggplot(trans_df, aes(x=prob)) +
   facet_wrap(~culture) + geom_density(aes(color=learner_sex, fill=learner_sex, alpha=learner_sex, linetype=learner_sex)) +
   theme_bw(base_size = 15) +
@@ -589,10 +594,10 @@ pr_fH <- matrix( NA, nrow=n_samps, ncol=N_skillH )
 
 # Task difficulty and task male-ness
 rank_B <- matrix( NA, nrow=n_samps, ncol=N_skillB )
-alphaM_B <- alpha_B
+alphaM_B <- rank_B
 
 rank_H <- matrix( NA, nrow=n_samps, ncol=N_skillH )
-alphaM_H <- alpha_H
+alphaM_H <- rank_H
 
 for (s in 1:N_skillB) {
   pr_fB[,s] <- 1 - logistic( post$as + (post$sexcult_v[,3,6] + post$sexcult_v[,4,6])/2 +  post$skillB_v[,s,10]  )
@@ -644,7 +649,7 @@ skill_sex <- ggplot(data=both_ft, aes(color=culture, size=rank_med - min(rank_me
   scale_x_continuous(breaks=c(-3, 3), labels=c("Female-Biased \nTasks", "Male-Biased \nTasks")) + 
   scale_y_continuous(breaks=c(0,0.5,1), labels=c("0", "0.5", "1")) +
   scale_size_area(name = "Task Ranking", breaks=c(1,2), labels=c("Less Difficult", "More Difficult")) + 
-  theme(legend.title = element_text(),  strip.background = element_blank(),strip.text.x = element_blank()) + 
+  theme(legend.title = element_text(),strip.background = element_rect(fill="white", color="black")) + 
   ggtitle("b")
 
 svg("Figure_5.svg", height=8, width=8, pointsize = 12)

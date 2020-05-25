@@ -1,0 +1,44 @@
+﻿Culture,In figure,Change to
+BaYaka,X1.hole,Q1. Dig hole
+BaYaka,X10.spear,Q10. Hunt with spear
+BaYaka,X11.koko,Q11. Cut koko
+BaYaka,X12.jabuka,Q12. Grate cassava
+BaYaka,X13.mbila,Q13. Press palm oil
+BaYaka,X14.butcheranimal,Q14. Butcher animal
+BaYaka,X15.butcherfish,Q15. Clean fish
+BaYaka,X16.fishpoison,Q16. Fish with poison
+BaYaka,X17.nethunt,Q17. Make hunting net
+BaYaka,X18.climbigtree,Q18. Climb tree
+BaYaka,X19.traps,Q19. Trap
+BaYaka,X2.smalltree,Q2. Cut small tree
+BaYaka,X20.pendi,Q20. Make honey basket
+BaYaka,X21.garden,Q21. Plant garden
+BaYaka,X23.kombi,Q22. Weave fish dam
+BaYaka,X24.honey,Q23. Honey types
+BaYaka,B_plant,Q24. Plant ID
+BaYaka,B_animal,Q25. Animal ID
+BaYaka,X4.basketvine,Q26. Basket vine free-list
+BaYaka,X18.climbingvine,Q27. Climbing vine free-list
+BaYaka,X3.bigtree,Q3. Cut large tree
+BaYaka,X4.basket,Q4. Weave basket
+BaYaka,X5.smokytorch,Q5. Make smoky torch
+BaYaka,X6.doka,Q6. Bail water
+BaYaka,X7.firewood,Q7. Cut firewood
+BaYaka,X8.fishtrap,Q8. Weave fish basket
+BaYaka,X9.gun,Q9. Hunt with gun
+Hadza,X1.digtuber,Q1. Dig tuber
+Hadza,X14.diggingstick,Q10. Make digging stick
+Hadza,X16.poison,Q11. Make arrow poison
+Hadza,X20.bow,Q12. Make bow
+Hadza,X21.arrow,Q13. Make arrow
+Hadza,H_plant,Q15. Plant ID
+Hadza,X22.honeyguide,Q14. Follow honey guide
+Hadza,H_animal,Q16. Animal ID
+Hadza,X2.firewood,Q2. Collect firewood
+Hadza,X3.bow,Q3. Hunt with bow
+Hadza,X5.pound,Q4. Pound corn
+Hadza,X6.butcher,Q5. Butcher animal
+Hadza,X7.pegs,Q6. Cut climbing pegs
+Hadza,X9.baobabstick,Q7. Baobab stick throwing
+Hadza,X10.kasha,Q8. Make baobab porridge
+Hadza,X13.honey,Q9. Honey types
