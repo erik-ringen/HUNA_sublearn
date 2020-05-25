@@ -191,6 +191,63 @@ Bskills <- d_B %>% group_by(skill) %>% summarise(ind = mean(skill_id))
 pub_labels <- read_csv("figure_labels.csv")
 Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In figure`)]
 Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
+###############################################
+######## Figure 1 #############################
+## Plotting correlated random effects ####
+post <- extract.samples(fit_m)
+
+## ranks
+rank_reB <- as.data.frame(post$skillB_v[,,11])
+rank_reH <- as.data.frame(post$skillH_v[,,11])
+colnames(rank_reB) <- paste0("B",1:ncol(rank_reB))
+colnames(rank_reH) <- paste0("H",1:ncol(rank_reH))
+# wide to long
+rank_reB <- rank_reB %>% gather(key="task", value="est")
+rank_reH <- rank_reH %>% gather(key="task", value="est")
+# combining
+rank_both <- bind_rows(rank_reB, rank_reH)
+rank_both$culture <- c(rep("BaYaka", nrow(rank_reB)), rep("Hadza", nrow(rank_reH)))
+
+
+# a[skill]
+a_reB <- as.data.frame(post$skillB_v[,,4])
+a_reH <- as.data.frame(post$skillH_v[,,4])
+colnames(a_reB) <- paste0("B",1:ncol(a_reB))
+colnames(a_reH) <- paste0("H",1:ncol(a_reH))
+# wide to long
+a_reB <- a_reB %>% gather(key="task", value="est")
+a_reH <- a_reH %>% gather(key="task", value="est")
+# combining
+a_both <- bind_rows(a_reB, a_reH)
+a_both$culture <- c(rep("BaYaka", nrow(a_reB)), rep("Hadza", nrow(a_reH)))
+
+# mega merge
+re_every <- bind_rows(rank_both, a_both)
+re_every$par <- c(rep("rank", nrow(rank_both)), rep("a", nrow(a_both)))
+
+re_sum <- re_every %>% group_by(task, par, culture) %>% summarise(lower=HPDI(est, prob=0.9)[1], upper=HPDI(est, prob=0.9)[2], median=median(est) ) %>% pivot_wider(names_from=par, values_from=c(lower, upper, median))
+
+# raw data
+Hadza_long <- Hadza_rank %>% gather(key="task", value="rank")
+BaYaka_long <- BaYaka_rank %>% gather(key="task", value="rank")
+
+both_rank <- bind_rows(Hadza_long, BaYaka_long)
+both_rank$culture <- c( rep("Hadza", nrow(Hadza_long)), rep("BaYaka", nrow(BaYaka_long)) )
+
+rank_plot <- both_rank %>% ggplot(aes(x=rank, y=task, color=culture, fill=culture)) + facet_wrap(~culture, scales="free_y") + geom_density_ridges(stat="binline", bins=10, scale=0.9) + theme_bw(base_size=15) + theme(legend.position = "none", axis.ticks.y=element_blank(), axis.text.y=element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), axis.ticks.x=element_blank(), axis.text.x=element_blank(),panel.spacing = unit(2, "lines")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + ylab("Subsistence Task") + xlab("Difficulty Ranking") + ggtitle("Study Data")
+
+endorse_plot <- d %>% filter(freelist == 0) %>% select(y, skill, culture) %>% group_by(skill, culture) %>% summarise(prop=sum(y)/n()) %>% ggplot(aes(x=prop, y=skill, color=culture)) + facet_wrap(~culture, scales="free") + geom_point() + xlab("Proportion of Endorsements") + ylab("Subsistence Task") + theme_bw(base_size=15) + theme(legend.position = "none", axis.ticks.y=element_blank(), axis.text.y=element_blank(),strip.background = element_rect(fill="white", color="black"), axis.ticks.x=element_blank(), panel.spacing = unit(2, "lines")) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_x_continuous(limits=c(0,1), breaks=c(0,0.5,1))
+
+re_plot <- ggplot(re_sum, aes(x=median_a, y=median_rank, color=culture)) + geom_point() + geom_errorbarh(aes(xmin=lower_a, xmax=upper_a), alpha=0.3) + geom_errorbar(aes(ymin=lower_rank, ymax=upper_rank), alpha=0.3) + theme_bw(base_size=15) + ylab(expression(alpha["task,rank"])) + xlab(expression(alpha["task,knowledge"])) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") + stat_ellipse(type = "norm", linetype = 2) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + ggtitle("Model Parameters")
+
+# correlations between rank and a
+rho_plot <- data.frame(est=c(post$Rho_skillB[,4,11], post$Rho_skillH[,4,11]), Culture = c(rep("BaYaka", length(post$lp__)), rep("Hadza", length(post$lp__)))) %>% ggplot(aes(x=est,color=Culture, fill=Culture)) + geom_density(alpha=0.5) + scale_y_discrete(expand = c(0, 0)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=15) + xlab(expression(paste("Correlation (",rho, ")"))) + ylab("") + ggtitle("Correlations Between Parameters")
+
+svg("Figure_1.svg",  height=6, width=7.5, pointsize=12)
+
+(rank_plot + re_plot) / (endorse_plot + rho_plot)
+
+dev.off()
 
 #### Figure 2 #################################
 #### Plot prior K functions ###################
@@ -218,7 +275,6 @@ ggplot(K_long, aes(x=as.numeric(Age), y=value)) + facet_wrap(~k) + geom_line(aes
 
 dev.off()
 ##################################################
-
 ###### Figure 3 ##################################
 #### Knowledge at age 14 ####
 
@@ -245,8 +301,8 @@ pred14_l$culture <- ifelse(pred14_l$skill %in% Bskills$skill2, "BaYaka", "Hadza"
 pred14_summary <- pred14_l %>% group_by(skill) %>% summarise(med=median(est), lower=HPDI(est, prob=0.9)[1], upper=HPDI(est, prob=0.9)[2]) %>% mutate(culture=ifelse(skill %in% Bskills$skill2, "BaYaka", "Hadza"))
 
 ### Match up to rank data
-B_rank_median <- data.frame(task=colnames(BaYaka_rank), med_rank=apply(BaYaka_rank, 2, mean))
-H_rank_median <- data.frame(task=colnames(Hadza_rank), med_rank=apply(Hadza_rank, 2, mean))
+B_rank_median <- data.frame(task=colnames(BaYaka_rank), med_rank=apply(BaYaka_rank, 2, median))
+H_rank_median <- data.frame(task=colnames(Hadza_rank), med_rank=apply(Hadza_rank, 2, median))
 
 B_rank_median$skill <- pub_labels$`Change to`[match(B_rank_median$task, pub_labels$`In figure`)]
 H_rank_median$skill <- pub_labels$`Change to`[match(H_rank_median$task, pub_labels$`In figure`)]
@@ -275,7 +331,6 @@ pred14_summary %>%
 
 dev.off()
 #####################################################
-
 ##### Figure 4 ######################################
 n_samps <- length(post$lp__) # number of posterior samples
 age_seq <- seq(from=0, to=50/80, length.out = 75)
@@ -722,11 +777,17 @@ pub_labels <- read_csv("figure_labels.csv")
 Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In figure`)]
 Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
 
+# Plot in order of their median task ranking
+Brank_med <- order(apply(BaYaka_rank, 2, median))
+
 # Order for plotting
-Hskills$order <- as.numeric( substr(sub('\\..*', '', Hskills$skill2), 2, nchar(sub('\\..*', '', Hskills$skill2))) )
-Bskills$order <- as.numeric( substr(sub('\\..*', '', Bskills$skill2), 2, nchar(sub('\\..*', '', Bskills$skill2))) )
+#Hskills$order <- as.numeric( substr(sub('\\..*', '', Hskills$skill2), 2, nchar(sub('\\..*', '', Hskills$skill2))) )
+#Bskills$order <- as.numeric( substr(sub('\\..*', '', Bskills$skill2), 2, nchar(sub('\\..*', '', Bskills$skill2))) )
 
 both_skills <- bind_rows(Hskills, Bskills)
+
+# Dispersion parameter for the freelist responses
+freelist_key <- d %>% group_by(skill) %>% summarise(freelist_id = mean(freelist_id[freelist_id > 0]))
 
 # Age sequence to predict along, 1 = 80 years
 age_seq <- seq(from=0, to=1, length.out = 30)
@@ -734,7 +795,8 @@ age_seq <- seq(from=0, to=1, length.out = 30)
 ##### Subsistence knowledge plot predict function
 skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, add=F, color="darkorange") {
   
-  preds <- matrix(NA, nrow=length(post$lp__), ncol=length(age_seq))
+  preds <- matrix(NA, nrow=length(post$lp__), ncol=length(age_seq)) # expected values
+  preds_resp <- preds # rng predictions
   expl <- ifelse( substr(skill, 1, 1) != "X", 1, 0)
   sex_d <- ifelse(sex == "Male", 1, 0)
   
@@ -769,6 +831,11 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   for (j in 1:ncol(preds)) {
     if (freelist == 0) preds[,j] <- 2 * ( logistic( ((1 - exp(-k*age_seq[j]))^b)^eta * exp(stem)) - 0.5 )
     if (freelist == 1) preds[,j] <- ((1 - exp(-k*age_seq[j]))^b)^eta * exp(stem)
+    
+    if (freelist == 1) {
+      preds_resp[,j] <- rnbinom( n_samps, mu=((1 - exp(-k*age_seq[j]))^b)^eta * exp(stem), size=post$phi_free[,freelist_key$freelist_id[freelist_key$skill == skill]] )
+    }
+    
   }
   
   quants <- PI/4
@@ -779,14 +846,16 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   PI_4 <- apply(preds, 2, PI, prob=quants*4)
   med <- apply(preds, 2, median)
   
+  if (freelist == 1) var_90 <- apply(preds_resp, 2, PI, prob=0.9)
+  
   # Initializing new plot if needed
   if (add == F) {
     if (freelist==0 & !(substr(skill,1,3) %in% c("B_a", "H_a", "B_p", "H_p"))) plot(NULL, xlim=c(0,1), ylim=c(-0.05,1.05), xlab="Age", ylab="Pr(Endorse Skill)", axes=F)
     if (freelist==0 & substr(skill,1,3) %in% c("B_a", "H_a", "B_p", "H_p")) plot(NULL, xlim=c(-0.05,1.05), ylim=c(-0.05,1.05), xlab="Age", ylab="Pr (Identify Species)",axes=F)
     
     if (freelist==1) {
-      plot(NULL, xlim=c(0,1), ylim=c(0,PI(preds, 0.97)[2]), xlab="Age", ylab="Freelist Sum", axes=F)
-      axis(2, at=round(seq(from=0, to=PI(preds, 0.97)[2], length.out = 4)))
+      plot(NULL, xlim=c(0,1), ylim=c(0,PI(preds_resp, 0.96)[2]), xlab="Age", ylab="Freelist Sum", axes=F)
+      axis(2, at=round(seq(from=0, to=PI(preds_resp, 0.96)[2], length.out = 4)))
     }
     else axis(2, at=c(0, 0.5, 1))
     
@@ -803,6 +872,10 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   else shade(PI_4, age_seq, col=col.alpha(color, 0.2))
   
   lines(x=age_seq, y=med, col=color, lwd=2)
+  if (freelist==1)  {
+    lines(x=age_seq, y=var_90[1,], lty="dashed", col=color)
+    lines(x=age_seq, y=var_90[2,], lty="dashed", col=color)
+  }
   
   ## Adding raw data
   skill_name <- skill
@@ -814,9 +887,9 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   }
   
   if (plot.data == T) {
-    if (substr(skill,1,3) %in% c("B_a", "H_a", "B_p", "H_p")) points(x=jitter(raw_d$age/80, amount=2/80), y=raw_d$y, col=col.alpha(color, 0.05), pch=16)
+    if (substr(skill,1,3) %in% c("B_a", "H_a", "B_p", "H_p")) points(x=jitter(raw_d$age/80, amount=1/80), y=raw_d$y, col=col.alpha(color, 0.05), pch=16)
     
-    else points(x=jitter(raw_d$age/80, amount=2/80), y=raw_d$y, col=col.alpha(color, 0.4), pch=16)
+    else points(x=jitter(raw_d$age/80, amount=1/80), y=raw_d$y, col=col.alpha(color, 0.4), pch=16)
   }
 }
 
@@ -824,7 +897,7 @@ skill_plot(skill="B_animal", culture="BaYaka", sex="Male")
 
 #### Plotting all BaYaka Skills #### 
 dev.off()
-pdf("BaYaka_skills_1.pdf", 
+svg("BaYaka_skills_1.svg", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -836,7 +909,7 @@ for (s in 1:9) {
 }
 dev.off()
 
-svg("BaYaka_skills_2.pdf", 
+svg("BaYaka_skills_2.svg", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -848,7 +921,7 @@ for (s in 10:18) {
 }
 dev.off()
 
-svg("BaYaka_skills_3.pdf", 
+svg("BaYaka_skills_3.svg", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -861,7 +934,7 @@ for (s in 19:27) {
 dev.off()
 
 #### Plotting all Hadza Skills #### 
-svg("Hadza_skills_1.pdf", 
+svg("Hadza_skills_1.svg", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -874,7 +947,7 @@ for (s in 1:9) {
 }
 dev.off()
 
-svg("Hadza_skills_2.pdf", 
+svg("Hadza_skills_2.svg", 
     width=8.5, 
     height=11, 
     pointsize=12)
@@ -888,8 +961,8 @@ for (s in 10:nrow(Hskills)) {
 dev.off()
 #####################################################
 #####################################################
-
-# Now, bring in sex-specific ranking data
+#### Sex differences in task difficulty ranking #####
+# bring in sex-specific ranking data
 B_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 1)
 H_sex <- readxl::read_xlsx("data-raw/forced pair.xlsx", sheet = 2)
 
@@ -925,59 +998,4 @@ ggplot(rating_long, aes(x=fct_reorder(task,value), y=value, color=sex, group=1))
 
 dev.off()
 ########################################################
-######## Figure 1 ########################
-## Plotting correlated random effects ####
-post <- extract.samples(fit_m)
-
-## ranks
-rank_reB <- as.data.frame(post$skillB_v[,,11])
-rank_reH <- as.data.frame(post$skillH_v[,,11])
-colnames(rank_reB) <- paste0("B",1:ncol(rank_reB))
-colnames(rank_reH) <- paste0("H",1:ncol(rank_reH))
-# wide to long
-rank_reB <- rank_reB %>% gather(key="task", value="est")
-rank_reH <- rank_reH %>% gather(key="task", value="est")
-# combining
-rank_both <- bind_rows(rank_reB, rank_reH)
-rank_both$culture <- c(rep("BaYaka", nrow(rank_reB)), rep("Hadza", nrow(rank_reH)))
-
-
-# a[skill]
-a_reB <- as.data.frame(post$skillB_v[,,4])
-a_reH <- as.data.frame(post$skillH_v[,,4])
-colnames(a_reB) <- paste0("B",1:ncol(a_reB))
-colnames(a_reH) <- paste0("H",1:ncol(a_reH))
-# wide to long
-a_reB <- a_reB %>% gather(key="task", value="est")
-a_reH <- a_reH %>% gather(key="task", value="est")
-# combining
-a_both <- bind_rows(a_reB, a_reH)
-a_both$culture <- c(rep("BaYaka", nrow(a_reB)), rep("Hadza", nrow(a_reH)))
-
-# mega merge
-re_every <- bind_rows(rank_both, a_both)
-re_every$par <- c(rep("rank", nrow(rank_both)), rep("a", nrow(a_both)))
-
-re_sum <- re_every %>% group_by(task, par, culture) %>% summarise(lower=HPDI(est, prob=0.9)[1], upper=HPDI(est, prob=0.9)[2], median=median(est) ) %>% pivot_wider(names_from=par, values_from=c(lower, upper, median))
-
-# raw data
-Hadza_long <- Hadza_rank %>% gather(key="task", value="rank")
-BaYaka_long <- BaYaka_rank %>% gather(key="task", value="rank")
-
-both_rank <- bind_rows(Hadza_long, BaYaka_long)
-both_rank$culture <- c( rep("Hadza", nrow(Hadza_long)), rep("BaYaka", nrow(BaYaka_long)) )
-
-rank_plot <- both_rank %>% ggplot(aes(x=rank, y=task, color=culture, fill=culture)) + facet_wrap(~culture, scales="free_y") + geom_density_ridges(stat="binline", bins=10, scale=0.9) + theme_bw(base_size=15) + theme(legend.position = "none", axis.ticks.y=element_blank(), axis.text.y=element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), axis.ticks.x=element_blank(), axis.text.x=element_blank(),panel.spacing = unit(2, "lines")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + ylab("Subsistence Task") + xlab("Difficulty Ranking") + ggtitle("Study Data")
-
-endorse_plot <- d %>% filter(freelist == 0) %>% select(y, skill, culture) %>% group_by(skill, culture) %>% summarise(prop=sum(y)/n()) %>% ggplot(aes(x=prop, y=skill, color=culture)) + facet_wrap(~culture, scales="free") + geom_point() + xlab("Proportion of Endorsements") + ylab("Subsistence Task") + theme_bw(base_size=15) + theme(legend.position = "none", axis.ticks.y=element_blank(), axis.text.y=element_blank(),strip.background = element_rect(fill="white", color="black"), axis.ticks.x=element_blank(), panel.spacing = unit(2, "lines")) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_x_continuous(limits=c(0,1), breaks=c(0,0.5,1))
-
-re_plot <- ggplot(re_sum, aes(x=median_a, y=median_rank, color=culture)) + geom_point() + geom_errorbarh(aes(xmin=lower_a, xmax=upper_a), alpha=0.3) + geom_errorbar(aes(ymin=lower_rank, ymax=upper_rank), alpha=0.3) + theme_bw(base_size=15) + ylab(expression(alpha["task,rank"])) + xlab(expression(alpha["task,knowledge"])) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none") + stat_ellipse(type = "norm", linetype = 2) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + ggtitle("Model Parameters")
- 
-# correlations between rank and a
-rho_plot <- data.frame(est=c(post$Rho_skillB[,4,11], post$Rho_skillH[,4,11]), Culture = c(rep("BaYaka", length(post$lp__)), rep("Hadza", length(post$lp__)))) %>% ggplot(aes(x=est,color=Culture, fill=Culture)) + geom_density(alpha=0.5) + scale_y_discrete(expand = c(0, 0)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_color_manual(values=c("seagreen", "cornflowerblue")) + scale_fill_manual(values=c("seagreen", "cornflowerblue")) + theme_bw(base_size=15) + xlab(expression(paste("Correlation (",rho, ")"))) + ylab("") + ggtitle("Correlations Between Parameters")
-
-svg("Figure_1.svg",  height=6, width=7.5, pointsize=12)
-(rank_plot + re_plot) / (endorse_plot + rho_plot)
-
-dev.off()
 
