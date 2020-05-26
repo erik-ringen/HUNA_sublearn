@@ -110,7 +110,7 @@ endorse_learn <- endorse_learn %>% rename(y = endorse)
 endorse_learn <- endorse_learn[,-which(names(endorse_learn) == "species")]
 
 ####### Wrangling rank data ######
-bfp_t <- t(bfp[,-ncol(bfp)])
+ bfp_t <- t(bfp[,-ncol(bfp)])
 colnames(bfp_t) <- bfp_t[1,]
 bfp_t <- bfp_t[-1,]
 

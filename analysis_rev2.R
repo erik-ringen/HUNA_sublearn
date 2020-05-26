@@ -875,11 +875,11 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   # Initializing new plot if needed
   if (add == F) {
     if (freelist==0 & !(substr(skill,1,3) %in% c("B_a", "H_a", "B_p", "H_p"))) plot(NULL, xlim=c(0,1), ylim=c(-0.05,1.05), xlab="Age", ylab="Pr(Endorse Skill)", axes=F)
-    if (freelist==0 & substr(skill,1,3) %in% c("B_a", "H_a", "B_p", "H_p")) plot(NULL, xlim=c(-0.05,1.05), ylim=c(-0.05,1.05), xlab="Age", ylab="Pr (Identify Species)",axes=F)
+    if (freelist==0 & substr(skill,1,3) %in% c("B_a", "H_a", "B_p", "H_p")) plot(NULL, xlim=c(0,1), ylim=c(-0.05,1.05), xlab="Age", ylab="Pr(Identify Species)",axes=F)
     
     if (freelist==1) {
-      plot(NULL, xlim=c(0,1), ylim=c(0,PI(preds_resp, 0.96)[2]), xlab="Age", ylab="Freelist Sum", axes=F)
-      axis(2, at=round(seq(from=0, to=PI(preds_resp, 0.96)[2], length.out = 4)))
+      plot(NULL, xlim=c(0,1), ylim=c(0,PI(preds_resp, 0.97)[2]), xlab="Age", ylab="Freelist Sum", axes=F)
+      axis(2, at=round(seq(from=0, to=PI(preds_resp, 0.97)[2], length.out = 4)))
     }
     else axis(2, at=c(0, 0.5, 1))
     
@@ -935,6 +935,10 @@ par(mfrow=c(3,3), cex=0.9)
 for (s in 1:9) {
   skill_plot(skill=Bskills$skill[s], culture="BaYaka", sex="Male", color="orange", quantiles = T)
   skill_plot(skill=Bskills$skill[s], culture="BaYaka", sex="Female", color="slategray", add=T, quantiles = T)
+  
+  if (s == 1) legend(0.25, 0.5, legend=c("Males", "Females"),
+                     col=c("orange", "slategray"), bg="transparent", lty=1, lwd=4)
+  
 }
 dev.off()
 
@@ -947,6 +951,9 @@ par(mfrow=c(3,3), cex=0.9)
 for (s in 10:18) {
   skill_plot(skill=Bskills$skill[s], culture="BaYaka", sex="Male", color="orange", quantiles = T)
   skill_plot(skill=Bskills$skill[s], culture="BaYaka", sex="Female", color="slategray", add=T, quantiles = T)
+  
+  if (s == 10) legend(0.25, 0.5, legend=c("Males", "Females"),
+                     col=c("orange", "slategray"), bg="transparent", lty=1, lwd=4)
 }
 dev.off()
 
@@ -955,10 +962,13 @@ svg("BaYaka_skills_3.svg",
     height=11, 
     pointsize=12)
 
-par(mfrow=c(3,3), cex=1)
+par(mfrow=c(3,3), cex=0.9)
 for (s in 19:27) {
   skill_plot(skill=Bskills$skill[s], culture="BaYaka", sex="Male", color="orange", quantiles = T)
   skill_plot(skill=Bskills$skill[s], culture="BaYaka", sex="Female", color="slategray", add=T, quantiles = T)
+  
+  if (s == 19) legend(0.25, 22, legend=c("Males", "Females"),
+                     col=c("orange", "slategray"), bg="transparent", lty=1, lwd=4)
 }
 dev.off()
 
@@ -968,11 +978,14 @@ svg("Hadza_skills_1.svg",
     height=11, 
     pointsize=12)
 
-par(mfrow=c(3,3), cex=1)
+par(mfrow=c(3,3), cex=0.9)
 
 for (s in 1:9) {
   skill_plot(skill=Hskills$skill[s], culture="Hadza", sex="Male", color="orange", quantiles = T)
   skill_plot(skill=Hskills$skill[s], culture="Hadza", sex="Female", color="slategray", add=T, quantiles = T)
+  
+  if (s == 1) legend(0.25, 0.5, legend=c("Males", "Females"),
+                      col=c("orange", "slategray"), bg="transparent", lty=1, lwd=4)
 }
 dev.off()
 
@@ -981,11 +994,14 @@ svg("Hadza_skills_2.svg",
     height=11, 
     pointsize=12)
 
-par(mfrow=c(3,3), cex=1)
+par(mfrow=c(3,3), cex=0.9)
 
 for (s in 10:nrow(Hskills)) {
   skill_plot(skill=Hskills$skill[s], culture="Hadza", sex="Male", color="orange", quantiles = T)
   skill_plot(skill=Hskills$skill[s], culture="Hadza", sex="Female", color="slategray", add=T, quantiles = T)
+  
+  if (s == 10) legend(0.25, 0.5, legend=c("Males", "Females"),
+                      col=c("orange", "slategray"), bg="transparent", lty=1, lwd=4)
 }
 dev.off()
 #####################################################
@@ -1102,8 +1118,228 @@ ggplot(age_par_summary, aes(x=med, y=name, color=culture)) + facet_grid(culture 
 dev.off()
 
 ##########################################
-#### Method of Transmission ##############
+#### Pathway of Learning #################
+logsumexp <- function (x) {
+  y = max(x)
+  y + log(sum(exp(x - y)))
+}
 
+softmax2 <- function (x) {
+  exp(x - logsumexp(x))
+}
+
+B_hor <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+B_obl <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+B_vert <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+
+H_hor <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+H_obl <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+H_vert <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+
+for ( j in 1:N_skillB ) {
+  pathway <- cbind( post$at[,1] + (post$sexcult_v[,3,2] + post$sexcult_v[,4,2])/2 + post$skillB_v[,j,6], post$at[,2] + (post$sexcult_v[,3,3] + post$sexcult_v[,4,3])/2 + post$skillB_v[,j,7], 0 )
+  
+  for (i in 1:nrow(pathway)) pathway[i,] <- softmax2(pathway[i,])
+  
+  B_hor[,j] = pathway[,1]
+  B_obl[,j] = pathway[,2]
+  B_vert[,j] = pathway[,3]
+}
+
+for ( j in 1:N_skillH ) {
+  pathway <- cbind( post$at[,1] + (post$sexcult_v[,1,2] + post$sexcult_v[,2,2])/2 + post$skillH_v[,j,6], post$at[,2] + (post$sexcult_v[,1,2] + post$sexcult_v[,2,2])/2 + post$skillH_v[,j,7], 0 )
+  
+  for (i in 1:nrow(pathway)) pathway[i,] <- softmax2(pathway[i,])
+  
+  H_hor[,j] = pathway[,1]
+  H_obl[,j] = pathway[,2]
+  H_vert[,j] = pathway[,3]
+}
+
+# Add skill names
+H_hor <- as.data.frame(H_hor);names(H_hor) <- Hskills$skill2[order(Hskills$ind)]
+H_obl <- as.data.frame(H_obl);names(H_obl) <- Hskills$skill2[order(Hskills$ind)]
+H_vert <- as.data.frame(H_vert);names(H_vert) <- Hskills$skill2[order(Hskills$ind)]
+
+H_hor <- H_hor %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Horizontal", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_obl <- H_obl %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Oblique", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_vert <- H_vert %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Vertical", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+B_hor <- as.data.frame(B_hor);names(B_hor) <- Bskills$skill2[order(Bskills$ind)]
+B_obl <- as.data.frame(B_obl);names(B_obl) <- Bskills$skill2[order(Bskills$ind)]
+B_vert <- as.data.frame(B_vert);names(B_vert) <- Bskills$skill2[order(Bskills$ind)]
+
+B_hor <- B_hor %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Horizontal", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_obl <- B_obl %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Oblique", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_vert <- B_vert %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Vertical", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+path_long <- bind_rows(H_hor, H_obl, H_vert, B_hor, B_obl, B_vert)
+path_summary <- path_long %>% group_by(culture, par, name) %>% summarise(med = median(value), lower=HPDI(value, prob=0.9)[1], upper=HPDI(value, prob=0.9)[2])
+
+svg("path_pars.svg", height=9, width=8, pointsize=12)
+ggplot(path_summary, aes(x=med, y=name, color=culture)) + facet_grid(culture ~ fct_rev(par), scales="free_y") + geom_point() + geom_errorbarh(aes(y=name, xmin=lower, xmax=upper), height=0, lwd=1) + theme_bw(base_size = 14) + theme(legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), legend.position = "none") + xlab("") + ylab("") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + xlab("Probability of Transmission Pathway")  + scale_x_continuous(breaks=c(0,0.25,0.5,0.75,1), labels=c(0,0.25,0.5,0.75,1))
+dev.off()
+
+
+##########################################
+#### Method of Learning ##############
+logsumexp <- function (x) {
+  y = max(x)
+  y + log(sum(exp(x - y)))
+}
+
+softmax2 <- function (x) {
+  exp(x - logsumexp(x))
+}
+
+B_obs <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+B_teach <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+B_ind <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+
+H_obs <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+H_teach <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+H_ind <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+
+for ( j in 1:N_skillB ) {
+  method <- cbind( post$am[,1] + (post$sexcult_v[,3,4] + post$sexcult_v[,4,4])/2 + post$skillB_v[,j,8], post$am[,2] + (post$sexcult_v[,3,5] + post$sexcult_v[,4,5])/2 + post$skillB_v[,j,9], 0 )
+  
+  for (i in 1:nrow(method)) method[i,] <- softmax2(method[i,])
+  
+  B_obs[,j] = method[,1]
+  B_teach[,j] = method[,2]
+  B_ind[,j] = method[,3]
+}
+
+for ( j in 1:N_skillH ) {
+  method <- cbind( post$am[,1] + (post$sexcult_v[,1,4] + post$sexcult_v[,2,4])/2 + post$skillH_v[,j,8], post$am[,2] + (post$sexcult_v[,1,5] + post$sexcult_v[,2,5])/2 + post$skillH_v[,j,9], 0 )
+  
+  for (i in 1:nrow(method)) method[i,] <- softmax2(method[i,])
+  
+  H_obs[,j] = method[,1]
+  H_teach[,j] = method[,2]
+  H_ind[,j] = method[,3]
+}
+
+# Add skill names
+H_obs <- as.data.frame(H_obs);names(H_obs) <- Hskills$skill2[order(Hskills$ind)]
+H_teach <- as.data.frame(H_teach);names(H_teach) <- Hskills$skill2[order(Hskills$ind)]
+H_ind <- as.data.frame(H_ind);names(H_ind) <- Hskills$skill2[order(Hskills$ind)]
+
+H_obs <- H_obs %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Observation", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_teach <- H_teach %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Teaching", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_ind <- H_ind %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Individual", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+B_obs <- as.data.frame(B_obs);names(B_obs) <- Bskills$skill2[order(Bskills$ind)]
+B_teach <- as.data.frame(B_teach);names(B_teach) <- Bskills$skill2[order(Bskills$ind)]
+B_ind <- as.data.frame(B_ind);names(B_ind) <- Bskills$skill2[order(Bskills$ind)]
+
+B_obs <- B_obs %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Observation", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_teach <- B_teach %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Teaching", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_ind <- B_ind %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Individual", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+method_long <- bind_rows(H_obs, H_teach, H_ind, B_obs, B_teach, B_ind)
+method_summary <- method_long %>% group_by(culture, par, name) %>% summarise(med = median(value), lower=HPDI(value, prob=0.9)[1], upper=HPDI(value, prob=0.9)[2])
+
+svg("method_pars.svg", height=9, width=8, pointsize=12)
+ggplot(method_summary, aes(x=med, y=name, color=culture)) + facet_grid(culture ~ fct_rev(par), scales="free_y") + geom_point() + geom_errorbarh(aes(y=name, xmin=lower, xmax=upper), height=0, lwd=1) + theme_bw(base_size = 14) + theme(legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), legend.position = "none") + xlab("") + ylab("") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + xlab("Probability of Learning Method")
+dev.off()
+
+##########################################
+#### Reliability supplement ##############
+
+# We want to calc the reliability of the rankings among rankers`
+# N_r = number of rankers
+# c_hat = average covariance between rankers
+# v_hat = average variance within rankers
+
+# alpha = (N_r*c_hat) / (v_hat + (N_r-1)*c_hat)
+
+##################################
+## Set graphical pars ##
+{
+svg("reliability_supp.svg", height=9, width=8, pointsize=12)
+par(mfcol=c(2,2))
+
+##### Check BaYaka data first ####
+N_r <- nrow(BaYaka_rank)
+
+c <- cov( t(BaYaka_rank) ) # transposed matrix to get between-rater covariance
+c_hat <- mean(c[lower.tri(c)])
+
+var <- apply(t(BaYaka_rank), 2, var) # variance of items
+v_hat <- mean(var)
+
+alpha <- (N_r*c_hat) / (v_hat + (N_r-1)*c_hat)
+round(alpha, 2)
+
+#### How much variance vs expected variance in ranks due to chance?
+N_ranks <- ncol(BaYaka_rank)
+
+# Individual rankings
+sorted_tasks <- BaYaka_rank[,names(sort(apply(BaYaka_rank, 2, median)))] * N_ranks
+
+plot(apply((sorted_tasks), 2, mean), type="l", lwd=2, ylim=c(0,N_ranks), ylab="Rank", xlab="Ranked Task (sorted low to high)", col="seagreen")
+mtext( expression("(BaYaka) Cronbach's" ~ alpha ~ "= 0.91" ))
+for (i in 1:nrow(sorted_tasks)) lines(x=1:N_ranks, y=sorted_tasks[i,], col=col.alpha("seagreen", 0.5))
+
+# First, calc the expected variance under null model
+n_sims <- 5000
+null_var <- c()
+for (i in 1:n_sims) {
+  rank <- matrix(NA, nrow=N_ranks, ncol=N_r)
+  for (j in 1:N_r) rank[,j] <- sample( 1:N_ranks, size=N_ranks, replace=F )
+  
+  null_var[i] <- mean(apply(t(rank), 2, var))
+}
+
+# Compare to actual variance
+B_var <- apply(BaYaka_rank*N_ranks, 2, var)
+
+hist( B_var / mean(null_var) , main = "Observed Rank Variance / Null Rank Variance", xlab="")
+mtext("BaYaka")
+abline(v=1, lty="dashed", col="red")
+
+##### Then Hadza ####
+N_r <- nrow(Hadza_rank)
+
+c <- cov( t(Hadza_rank) ) # transposed matrix to get between-rater covariance
+c_hat <- mean(c[lower.tri(c)])
+
+var <- apply(t(Hadza_rank), 2, var) # variance of items
+v_hat <- mean(var)
+
+alpha <- (N_r*c_hat) / (v_hat + (N_r-1)*c_hat)
+round(alpha, 2)
+
+#### How much variance vs expected variance in ranks due to chance?
+N_ranks <- ncol(Hadza_rank)
+
+# Individual ranks
+sorted_tasks <- Hadza_rank[,names(sort(apply(Hadza_rank, 2, median)))] * N_ranks
+
+plot(apply((sorted_tasks), 2, mean), type="l", lwd=2, ylim=c(0,N_ranks), ylab="Rank", xlab="Ranked Task (sorted low to high)", col="cornflowerblue")
+mtext( expression("(Hadza) Cronbach's" ~ alpha ~ "= 0.88" ))
+for (i in 1:nrow(sorted_tasks)) lines(x=1:N_ranks, y=sorted_tasks[i,], col=col.alpha("cornflowerblue", 0.5))
+
+# First, calc the expected variance under null model
+n_sims <- 5000
+null_var <- c()
+for (i in 1:n_sims) {
+  rank <- matrix(NA, nrow=N_ranks, ncol=N_r)
+  for (j in 1:N_r) rank[,j] <- sample( 1:N_ranks, size=N_ranks, replace=F )
+  
+  null_var[i] <- mean(apply(t(rank), 2, var))
+}
+
+# Compare to actual variance
+H_var <- apply(Hadza_rank*N_ranks, 2, var)
+
+hist( H_var / mean(null_var) , main = "Observed Rank Variance / Null Rank Variance", xlab="")
+abline(v=1, lty="dashed", col="red")
+mtext("Hadza")
+
+dev.off()
+} # end reliability plot
 
 ##########################################
 #### Social learning individual ternary plots
