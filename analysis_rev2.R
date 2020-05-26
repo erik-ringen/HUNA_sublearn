@@ -392,7 +392,7 @@ svg( "Figure_4.svg" , height=6, width=8.5, pointsize=12 )
 med_S_plot + rank_cor_plot
 
 dev.off()
-
+#####################################
 #### Transmission method results ####
 logsumexp <- function (x) {
   y = max(x)
@@ -484,7 +484,7 @@ both_profiles$Culture <- c( rep("BaYaka", times=nrow(B_ID)),rep("Hadza", times=n
 
 library(ggtern)
 
-ggtern(both_profiles, mapping = aes(x = x, y = y, z = z)) + facet_wrap(~Culture) + geom_point(alpha=0.5, size=3, aes(color=Sex)) + tern_limits(T=1.05, L=1.05, R=1.05) + scale_color_manual(values=c("slategray", "orange")) + theme_bw(base_size=13) + xlab("Obs") + ylab("Teach") + zlab("Ind") + theme(strip.background = element_rect(fill="white", color="black"), tern.plot.background = element_rect(fill="white", color="black"))
+tern_path <- ggtern(both_profiles, mapping = aes(x = x, y = y, z = z)) + facet_wrap(~Culture) + geom_point(alpha=0.5, size=3, aes(color=Sex)) + tern_limits(T=1.05, L=1.05, R=1.05) + scale_color_manual(values=c("slategray", "orange")) + theme_bw(base_size=13) + xlab("Obs") + ylab("Teach") + zlab("Ind") + theme(strip.background = element_rect(fill="white", color="black"), tern.plot.background = element_rect(fill="white", color="black")) + ggtitle("a Transmission Pathway")
 
 detach("package:ggtern", unload=TRUE)
 
@@ -582,7 +582,7 @@ both_profiles$Culture <- c( rep("BaYaka", times=nrow(B_ID)),rep("Hadza", times=n
 
 library(ggtern)
 
-ggtern(both_profiles, mapping = aes(x = x, y = y, z = z)) + facet_wrap(~Culture) + geom_point(alpha=0.5, size=3, aes(color=Sex)) + tern_limits(T=1.05, L=1.05, R=1.05) + scale_color_manual(values=c("slategray", "orange")) + theme_bw(base_size=13) + xlab("Hor") + ylab("Obl") + zlab("Ver") + theme(strip.background = element_rect(fill="white", color="black"), tern.plot.background = element_rect(fill="white", color="black"))
+method_tern <- ggtern(both_profiles, mapping = aes(x = x, y = y, z = z)) + facet_wrap(~Culture) + geom_point(alpha=0.5, size=3, aes(color=Sex)) + tern_limits(T=1.05, L=1.05, R=1.05) + scale_color_manual(values=c("slategray", "orange")) + theme_bw(base_size=13) + xlab("Hor") + ylab("Obl") + zlab("Ver") + theme(strip.background = element_rect(fill="white", color="black"), tern.plot.background = element_rect(fill="white", color="black")) + ggtitle("b Learning Method")
 
 detach("package:ggtern", unload=TRUE)
 
@@ -778,13 +778,37 @@ Hskills$skill2 <- pub_labels$`Change to`[match(Hskills$skill, pub_labels$`In fig
 Bskills$skill2 <- pub_labels$`Change to`[match(Bskills$skill, pub_labels$`In figure`)]
 
 # Plot in order of their median task ranking
-Brank_med <- order(apply(BaYaka_rank, 2, median))
+Brank_med <- data.frame( order = 1:ncol(BaYaka_rank),
+                         skill = names(sort(apply(BaYaka_rank, 2, median))),
+                         med_rank = paste0( sort(apply(BaYaka_rank, 2, median))*ncol(BaYaka_rank), "/", ncol(BaYaka_rank)  )
+)
+                         
+Hrank_med <- data.frame( order = 1:ncol(Hadza_rank), 
+                         skill = names(sort(apply(Hadza_rank, 2, median))), 
+                         med_rank = paste0( sort(apply(Hadza_rank, 2, median))*ncol(Hadza_rank), "/", ncol(Hadza_rank) )
+)
 
-# Order for plotting
+Bskills <- left_join(Bskills, Brank_med)
+Hskills <- left_join(Hskills, Hrank_med) 
+
+# Fill in plot order for skills that weren't ranked
+for (s in 1:nrow(Bskills)) {
+  if(is.na(Bskills$order[s])) Bskills$order[s] <- max(Bskills$order,na.rm = T) + 1
+}
+
+for (s in 1:nrow(Hskills)) {
+  if(is.na(Hskills$order[s])) Hskills$order[s] <- max(Hskills$order,na.rm = T) + 1
+}
+
+# Sort the dataframe by order of ranks
+Bskills <- arrange(Bskills, order)
+Hskills <- arrange(Hskills, order)
+
+both_skills <- bind_rows(Bskills, Hskills)
+
+# old order for plotting
 #Hskills$order <- as.numeric( substr(sub('\\..*', '', Hskills$skill2), 2, nchar(sub('\\..*', '', Hskills$skill2))) )
 #Bskills$order <- as.numeric( substr(sub('\\..*', '', Bskills$skill2), 2, nchar(sub('\\..*', '', Bskills$skill2))) )
-
-both_skills <- bind_rows(Hskills, Bskills)
 
 # Dispersion parameter for the freelist responses
 freelist_key <- d %>% group_by(skill) %>% summarise(freelist_id = mean(freelist_id[freelist_id > 0]))
@@ -819,7 +843,7 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
   
   if (culture == "BaYaka") {
     skill_id <- Bskills[ Bskills$skill == skill , ]$ind
-    freelist <- ifelse( skill %in% c("B_basketvine", "B_climbvine", "X9.gun", "X24.honey", "X10.spear", "X19.traps"), 1, 0)
+    freelist <- ifelse( skill %in% c("X4.basketvine", "X18.climbingvine", "X9.gun", "X24.honey", "X10.spear", "X19.traps"), 1, 0)
     
     k <- exp(post$ak + post$skillB_v[,skill_id,1])
     b <- exp(post$ab + post$skillB_v[,skill_id,2])
@@ -860,7 +884,12 @@ skill_plot <- function( skill, culture, sex, plot.data=T, PI=0.9, quantiles=T, a
     else axis(2, at=c(0, 0.5, 1))
     
     axis(1, at=c(0,0.2,0.4,0.6,0.8,1), labels=80*c(0,0.2,0.4,0.6,0.8,1))
-    mtext(both_skills$skill2[both_skills$skill == skill], line=0.5, cex=1.1)
+    
+    # Title of task + median rank
+    if (is.na(both_skills$med_rank[both_skills$skill == skill])) mtext( paste(both_skills$skill2[both_skills$skill == skill], "Not ranked", sep="\n"),line=0.5, cex=1.1)
+
+    else mtext( paste(both_skills$skill2[both_skills$skill == skill], paste0("Med. Difficulty Rank = ", both_skills$med_rank[both_skills$skill == skill]), sep="\n"),line=0.5, cex=1.1)
+    
   }
   
   if (quantiles == T) {
@@ -960,6 +989,7 @@ for (s in 10:nrow(Hskills)) {
 }
 dev.off()
 #####################################################
+
 #####################################################
 #### Sex differences in task difficulty ranking #####
 # bring in sex-specific ranking data
@@ -992,10 +1022,95 @@ rating_long$value <- as.numeric(rating_long$value)
 # med by culture and sex
 rating_summary <- rating_long %>% group_by(culture, sex, task) %>% summarise(value = median((value)))
 
-svg( file="Supp_sex_rank.svg", width=8.5, height=9, pointsize=12 )
+svg( file="Supp_sex_rank.svg", width=8.5, height=8, pointsize=12 )
 
 ggplot(rating_long, aes(x=fct_reorder(task,value), y=value, color=sex, group=1)) + facet_wrap(~culture, scales="free") + geom_jitter(width=0, alpha=0.35) + stat_summary(aes(y=value, group=sex), fun="mean", geom="line", lwd=1) + coord_flip() + ylab("Difficulty Ranking") + xlab("") + theme_bw(base_size=15) + scale_color_manual(values=c("slategray", "orange")) + theme(strip.background = element_rect(fill="white"))
 
 dev.off()
 ########################################################
+##### Additional parameter estimates ###################
+## rate of learning (k) by task for each population ####
+# BaYaka
+B_k <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+for (j in 1:ncol(B_k)) {
+  B_k[,j] <- exp( post$ak + post$skillB_v[,j,1] )
+}
 
+B_k <- as.data.frame(B_k)
+names(B_k) <- Bskills$skill2[order(Bskills$ind)]
+B_k <- B_k %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("k", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+# Hadza
+H_k <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+for (j in 1:ncol(H_k)) {
+  H_k[,j] <- exp( post$ak + post$skillH_v[,j,1] )
+}
+
+H_k <- as.data.frame(H_k)
+names(H_k) <- Hskills$skill2[order(Hskills$ind)]
+H_k <- H_k %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("k", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+## elasticity of learning (b) by task for each population ####
+# BaYaka
+B_b <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+for (j in 1:ncol(B_b)) {
+  B_b[,j] <- exp( post$ab + post$skillB_v[,j,2] )
+}
+
+B_b <- as.data.frame(B_b)
+names(B_b) <- Bskills$skill2[order(Bskills$ind)]
+B_b <- B_b %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("b", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+# Hadza
+H_b <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+for (j in 1:ncol(H_b)) {
+  H_b[,j] <- exp( post$ab + post$skillH_v[,j,2] )
+}
+
+H_b <- as.data.frame(H_b)
+names(H_b) <- Hskills$skill2[order(Hskills$ind)]
+H_b <- H_b %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("b", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+## elasticity of knowledge (eta) by task for each population ####
+# BaYaka
+B_eta <- matrix( NA, nrow=n_samps, ncol=N_skillB )
+for (j in 1:ncol(B_eta)) {
+  B_eta[,j] <- exp( post$ae + post$skillB_v[,j,3] )
+}
+
+B_eta <- as.data.frame(B_eta)
+names(B_eta) <- Bskills$skill2[order(Bskills$ind)]
+B_eta <- B_eta %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("eta", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+# Hadza
+H_eta <- matrix( NA, nrow=n_samps, ncol=N_skillH )
+for (j in 1:ncol(H_eta)) {
+  H_eta[,j] <- exp( post$ae + post$skillH_v[,j,3] )
+}
+
+H_eta <- as.data.frame(H_eta)
+names(H_eta) <- Hskills$skill2[order(Hskills$ind)]
+H_eta <- H_eta %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("eta", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+### Put all the age-structured parameters together ####
+age_pars <- bind_rows(B_k, H_k, B_b, H_b, B_eta, H_eta)
+
+age_par_summary <- age_pars %>% group_by(culture, name, par) %>% summarise(med = median(value), lower=HPDI(value, prob=0.9)[1], upper=HPDI(value, prob=0.9)[2])
+
+svg("learning_pars.svg", height=9, width=8, pointsize=12)
+ggplot(age_par_summary, aes(x=med, y=name, color=culture)) + facet_grid(culture ~ fct_rev(par), scales="free") + geom_point() + geom_errorbarh(aes(y=name, xmin=lower, xmax=upper), height=0, lwd=1) + theme_bw(base_size = 14) + theme(legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), legend.position = "none") + xlab("") + ylab("") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + xlab("")
+dev.off()
+
+##########################################
+#### Method of Transmission ##############
+
+
+##########################################
+#### Social learning individual ternary plots
+svg("tranmission_pathway.svg", width=7, height=5, pointsize=12)
+tern_path
+dev.off()
+
+svg("method_transmission.svg", width=7, height=5, pointsize=12)
+method_tern
+dev.off()
