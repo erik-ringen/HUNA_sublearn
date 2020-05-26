@@ -4,6 +4,7 @@ library(rethinking) # https://github.com/rmcelreath/rethinking/
 library(ggridges)
 library(viridis)
 library(patchwork) # https://github.com/thomasp85/patchwork
+library(sjPlot)
 
 # Read in subsistence skill data (tacit and explicit knoweldge) for both pops
 d <- read.csv("skill_data.csv", stringsAsFactors = F)
@@ -1244,6 +1245,142 @@ svg("method_pars.svg", height=9, width=8, pointsize=12)
 ggplot(method_summary, aes(x=med, y=name, color=culture)) + facet_grid(culture ~ fct_rev(par), scales="free_y") + geom_point() + geom_errorbarh(aes(y=name, xmin=lower, xmax=upper), height=0, lwd=1) + theme_bw(base_size = 14) + theme(legend.title = element_blank(), strip.background = element_rect(fill="white", color="black"), legend.position = "none") + xlab("") + ylab("") + scale_color_manual(values=c("seagreen", "cornflowerblue")) + xlab("Probability of Learning Method")
 dev.off()
 
+####################################################
+#### Method of transmission: recall bias due to age?
+age_seq <- seq(from=0, to=1, length.out = 30)
+
+logsumexp <- function (x) {
+  y = max(x)
+  y + log(sum(exp(x - y)))
+}
+
+softmax2 <- function (x) {
+  exp(x - logsumexp(x))
+}
+
+B_obs <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+B_teach <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+B_ind <- matrix( NA, nrow=n_samps, ncol=length(age_seq))
+
+H_obs <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+H_teach <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+H_ind <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+
+for ( j in 1:ncol(B_obs) ) {
+  method <- cbind( post$am[,1] + (post$sexcult_v[,3,4] + post$sexcult_v[,4,4])/2 + post$mB_age[,1]*age_seq[j] + post$m2B_age[,1]*age_seq[j]^2, post$am[,2] + (post$sexcult_v[,3,5] + post$sexcult_v[,4,5])/2 + post$mB_age[,2]*age_seq[j] + post$m2B_age[,2]*age_seq[j]^2, 0 )
+  
+  for (i in 1:nrow(method)) method[i,] <- softmax2(method[i,])
+  
+  B_obs[,j] = method[,1]
+  B_teach[,j] = method[,2]
+  B_ind[,j] = method[,3]
+}
+
+for ( j in 1:ncol(H_obs) ) {
+  method <- cbind( post$am[,1] + (post$sexcult_v[,1,4] + post$sexcult_v[,2,4])/2 + post$mH_age[,1]*age_seq[j] + post$m2H_age[,1]*age_seq[j]^2, post$am[,2] + (post$sexcult_v[,1,5] + post$sexcult_v[,2,5])/2 + post$mH_age[,2]*age_seq[j] + post$m2H_age[,2]*age_seq[j]^2, 0 )
+  
+  for (i in 1:nrow(method)) method[i,] <- softmax2(method[i,])
+  
+  H_obs[,j] = method[,1]
+  H_teach[,j] = method[,2]
+  H_ind[,j] = method[,3]
+}
+
+# Add ages
+H_obs <- as.data.frame(H_obs);names(H_obs) <- age_seq*80
+H_teach <- as.data.frame(H_teach);names(H_teach) <- age_seq*80
+H_ind <- as.data.frame(H_ind);names(H_ind) <- age_seq*80
+
+B_obs <- as.data.frame(B_obs);names(B_obs) <- age_seq*80
+B_teach <- as.data.frame(B_teach);names(B_teach) <- age_seq*80
+B_ind <- as.data.frame(B_ind);names(B_ind) <- age_seq*80
+
+B_obs <- B_obs %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Observation", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_teach <- B_teach %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Teaching", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_ind <- B_ind %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Individual", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+H_obs <- H_obs %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Observation", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_teach <- H_teach %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Teaching", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_ind <- H_ind %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Individual", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+# Put all together
+age_method <- bind_rows(H_obs, H_teach, H_ind, B_obs, B_teach, B_ind)
+age_method_summary <- age_method %>% group_by(culture, name, par) %>% summarise(med = median(value), lower=PI(value, prob=0.9)[1], upper=PI(value, prob=0.9)[2])
+
+age_method_plot <- ggplot(age_method_summary, aes(x=as.numeric(name), y=med, color=par, fill=par)) + facet_wrap(~culture) + geom_ribbon(aes(ymin=lower, ymax=upper, x=as.numeric(name)), color=NA, alpha=0.4) + geom_line()  + ylab("Pr (Learning Method | Age)") + xlab("Age") + theme_bw(base_size=15) + scale_color_manual(values=c("darkslateblue", "skyblue", "darkred")) + scale_fill_manual(values=c("darkslateblue", "skyblue", "darkred")) + theme(strip.background = element_rect(fill="white"), legend.title = element_blank())
+
+####################################################
+#### Pathway of transmission: recall bias due to age?
+age_seq <- seq(from=0, to=1, length.out = 30)
+
+logsumexp <- function (x) {
+  y = max(x)
+  y + log(sum(exp(x - y)))
+}
+
+softmax2 <- function (x) {
+  exp(x - logsumexp(x))
+}
+
+B_hor <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+B_obl <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+B_vert <- matrix( NA, nrow=n_samps, ncol=length(age_seq))
+
+H_hor <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+H_obl <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+H_vert <- matrix( NA, nrow=n_samps, ncol=length(age_seq) )
+
+for ( j in 1:ncol(B_hor) ) {
+  method <- cbind( post$at[,1] + (post$sexcult_v[,3,2] + post$sexcult_v[,4,2])/2 + post$tB_age[,1]*age_seq[j] + post$t2B_age[,1]*age_seq[j]^2, post$at[,2] + (post$sexcult_v[,3,3] + post$sexcult_v[,4,3])/2 + post$tB_age[,2]*age_seq[j] + post$t2B_age[,2]*age_seq[j]^2, 0 )
+  
+  for (i in 1:nrow(method)) method[i,] <- softmax2(method[i,])
+  
+  B_hor[,j] = method[,1]
+  B_obl[,j] = method[,2]
+  B_vert[,j] = method[,3]
+}
+
+for ( j in 1:ncol(H_hor) ) {
+  method <- cbind( post$at[,1] + (post$sexcult_v[,1,2] + post$sexcult_v[,2,2])/2 + post$tH_age[,1]*age_seq[j] + post$t2H_age[,1]*age_seq[j]^2, post$at[,2] + (post$sexcult_v[,1,3] + post$sexcult_v[,2,3])/2 + post$tH_age[,2]*age_seq[j] + post$t2H_age[,2]*age_seq[j]^2, 0 )
+  
+  for (i in 1:nrow(method)) method[i,] <- softmax2(method[i,])
+  
+  H_hor[,j] = method[,1]
+  H_obl[,j] = method[,2]
+  H_vert[,j] = method[,3]
+}
+
+# Add ages
+H_hor <- as.data.frame(H_hor);names(H_hor) <- age_seq*80
+H_obl <- as.data.frame(H_obl);names(H_obl) <- age_seq*80
+H_vert <- as.data.frame(H_vert);names(H_vert) <- age_seq*80
+
+B_hor <- as.data.frame(B_hor);names(B_hor) <- age_seq*80
+B_obl <- as.data.frame(B_obl);names(B_obl) <- age_seq*80
+B_vert <- as.data.frame(B_vert);names(B_vert) <- age_seq*80
+
+B_hor <- B_hor %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Horizontal", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_obl <- B_obl %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Oblique", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+B_vert <- B_vert %>% mutate(samp=1:n_samps, culture=rep("BaYaka", n_samps), par=rep("Vertical", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+H_hor <- H_hor %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Horizontal", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_obl <- H_obl %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Oblique", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+H_vert <- H_vert %>% mutate(samp=1:n_samps, culture=rep("Hadza", n_samps), par=rep("Vertical", n_samps)) %>% pivot_longer(-c(samp, culture, par))
+
+# Put all together
+age_path <- bind_rows(H_hor, H_obl, H_vert, B_hor, B_obl, B_vert)
+age_path_summary <- age_path %>% group_by(culture, name, par) %>% summarise(med = median(value), lower=PI(value, prob=0.9)[1], upper=PI(value, prob=0.9)[2])
+
+age_path_plot <- ggplot(age_path_summary, aes(x=as.numeric(name), y=med, color=par, fill=par)) + facet_wrap(~culture) + geom_ribbon(aes(ymin=lower, ymax=upper, x=as.numeric(name)), color=NA, alpha=0.4) + geom_line()  + ylab("Pr (Transmission Pathway | Age)") + xlab("Age") + theme_bw(base_size=15) + scale_color_brewer(palette = "Accent") + scale_fill_brewer(palette = "Accent") + theme(strip.background = element_rect(fill="white"), legend.title = element_blank())
+
+### Save both ####
+
+svg(file="age_recall_supp.svg", height=8, width=8, pointsize=12)
+
+age_method_plot / age_path_plot
+
+dev.off()
+
 ##########################################
 #### Reliability supplement ##############
 
@@ -1278,7 +1415,7 @@ N_ranks <- ncol(BaYaka_rank)
 # Individual rankings
 sorted_tasks <- BaYaka_rank[,names(sort(apply(BaYaka_rank, 2, median)))] * N_ranks
 
-plot(apply((sorted_tasks), 2, mean), type="l", lwd=2, ylim=c(0,N_ranks), ylab="Rank", xlab="Ranked Task (sorted low to high)", col="seagreen")
+plot(apply((sorted_tasks), 2, median), type="l", lwd=2, ylim=c(0,N_ranks), ylab="Rank", xlab="Ranked Task (sorted low to high)", col="seagreen")
 mtext( expression("(BaYaka) Cronbach's" ~ alpha ~ "= 0.91" ))
 for (i in 1:nrow(sorted_tasks)) lines(x=1:N_ranks, y=sorted_tasks[i,], col=col.alpha("seagreen", 0.5))
 
@@ -1317,7 +1454,7 @@ N_ranks <- ncol(Hadza_rank)
 # Individual ranks
 sorted_tasks <- Hadza_rank[,names(sort(apply(Hadza_rank, 2, median)))] * N_ranks
 
-plot(apply((sorted_tasks), 2, mean), type="l", lwd=2, ylim=c(0,N_ranks), ylab="Rank", xlab="Ranked Task (sorted low to high)", col="cornflowerblue")
+plot(apply((sorted_tasks), 2, median), type="l", lwd=2, ylim=c(0,N_ranks), ylab="Rank", xlab="Ranked Task (sorted low to high)", col="cornflowerblue")
 mtext( expression("(Hadza) Cronbach's" ~ alpha ~ "= 0.88" ))
 for (i in 1:nrow(sorted_tasks)) lines(x=1:N_ranks, y=sorted_tasks[i,], col=col.alpha("cornflowerblue", 0.5))
 
@@ -1340,6 +1477,42 @@ mtext("Hadza")
 
 dev.off()
 } # end reliability plot
+
+##########################################
+#### Posterior correlations (task) #######
+# BaYaka
+Rho_task_med <- round(apply(post$Rho_skillB, 2:3, median),2)
+Rho_task_med[10,] <- Rho_task_med[10,] * -1 # reversing sign so that its female tranmission as in MS 
+Rho_task_med[,10] <- Rho_task_med[,10] * -1 # reversing sign so that its female tranmission as in MS 
+
+colnames(Rho_task_med) <- c("k","b","eta","a","a_male","horiz","obl","obs","teach","male_transmission", "rank")
+rownames(Rho_task_med) <- colnames(Rho_task_med)
+sjt.corr(Rho_task_med, digits=2, file="taskcorr.doc")
+
+# Hadza
+Rho_task_med <- round(apply(post$Rho_skillH, 2:3, median),2)
+Rho_task_med[10,] <- Rho_task_med[10,] * -1 # reversing sign so that its female tranmission as in MS 
+Rho_task_med[,10] <- Rho_task_med[,10] * -1 # reversing sign so that its female tranmission as in MS 
+
+colnames(Rho_task_med) <- c("k","b","eta","a","a_male","horiz","obl","obs","teach","male_transmission", "rank")
+rownames(Rho_task_med) <- colnames(Rho_task_med)
+sjt.corr(Rho_task_med, digits=2, file="taskcorrH.doc")
+
+##########################################
+#### Posterior correlations (obs) #######
+# BaYaka
+Rho_obs_med <- round(apply(post$Rho_resB, 2:3, median),2)
+
+colnames(Rho_obs_med) <- sub( " .*", "", Bskills$skill2[order(Bskills$ind)] )
+rownames(Rho_obs_med) <- colnames(Rho_obs_med)
+sjt.corr(Rho_obs_med, digits=2, file="rescorr.doc")
+
+# Hadza
+Rho_obs_med <- round(apply(post$Rho_resH, 2:3, median),2)
+
+colnames(Rho_obs_med) <- sub( " .*", "", Hskills$skill2[order(Hskills$ind)] )
+rownames(Rho_obs_med) <- colnames(Rho_obs_med)
+sjt.corr(Rho_obs_med, digits=2, file="rescorrH.doc")
 
 ##########################################
 #### Social learning individual ternary plots
