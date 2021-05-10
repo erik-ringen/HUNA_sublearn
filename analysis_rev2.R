@@ -163,7 +163,7 @@ m_cor <- stan_model( file="subsistence_model_expl_cor.stan" )
 m_sub <- stan_model( file="subsistence_model_lh_rescor.stan" )
 
 fit_cor <- sampling( m_cor, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
-fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
+fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=500, control=list(adapt_delta=0.9 ) )
 
 # If they've been fit once, I suggest saving to-reload later
 # saveRDS(fit_cor, "fit_cor.rds")

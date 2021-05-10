@@ -127,6 +127,12 @@ cholesky_factor_corr[(4 + K_paths)] L_idB;
 
 cholesky_factor_corr[N_skillH] L_resH;  // residual correlation matrix
 cholesky_factor_corr[N_skillB] L_resB;  // residual correlation matrix
+
+// age measurement error parameters
+real a_age_H;
+real a_age_B;
+real<lower=0> sigma_age_H;
+real<lower=0> sigma_age_B;
 }
 
 transformed parameters{
@@ -174,9 +180,12 @@ vector[N_obs] eta; // elasticity for given domain on skill
 vector[N_obs] mu; // linear model
 
 //////////////////////////////////////////////////////////
-// Biological age with gaussian measurement error, scaled by 80 years old
-age_estH ~ normal(age_muH, age_seH);
-age_estB ~ normal(age_muB, age_seB);  
+// Biological age with gaussian measurement error, scaled by 80 years olds
+age_muH ~ normal(age_estH, age_seH);
+age_estH ~ normal(a_age_H, sigma_age_H);
+
+age_muB ~ normal(age_estB, age_seB);
+age_estB ~ normal(a_age_B, sigma_age_B);
 
 ///// Priors //////////////////////////////////////////////
 ap ~ std_normal(); // baseline probability of pursuing skill
@@ -209,6 +218,12 @@ a_HR ~ std_normal();
 a_BR ~ std_normal();
 sigma_HR ~ exponential(1);
 sigma_BR ~ exponential(1);
+
+// Age measurement error parameters
+a_age_H ~ std_normal();
+a_age_B ~ std_normal();
+sigma_age_H ~ exponential(1);
+sigma_age_B ~ exponential(1);
 
 /// random effects ///////////
 to_vector(idH_z) ~ std_normal();  // individual diff random effects, unscaled and uncorelated
