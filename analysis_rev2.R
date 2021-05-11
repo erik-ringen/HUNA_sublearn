@@ -5,6 +5,7 @@ library(ggridges)
 library(viridis)
 library(patchwork) # https://github.com/thomasp85/patchwork
 library(sjPlot)
+library(cubelyr)
 
 # Read in subsistence skill data (tacit and explicit knoweldge) for both pops
 d <- read.csv("skill_data.csv", stringsAsFactors = F)
@@ -163,7 +164,7 @@ m_cor <- stan_model( file="subsistence_model_expl_cor.stan" )
 m_sub <- stan_model( file="subsistence_model_lh_rescor.stan" )
 
 fit_cor <- sampling( m_cor, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
-fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=500, control=list(adapt_delta=0.9 ) )
+fit_m <- sampling( m_sub, data=data_list, init="0", chains=4, cores=4, iter=2000, control=list(adapt_delta=0.9 ) )
 
 # If they've been fit once, I suggest saving to-reload later
 # saveRDS(fit_cor, "fit_cor.rds")
@@ -360,8 +361,8 @@ for (s in 1:N_skillH) {
 }
 
 # Convert arrays into long form
-preds_B_long <- preds_B %>%  as.tbl_cube(met_name = "est") %>% as_tibble
-preds_H_long <- preds_H %>% as.tbl_cube(met_name = "est") %>% as_tibble
+preds_B_long <- preds_B %>% cubelyr::as.tbl_cube(met_name = "est") %>% as_tibble
+preds_H_long <- preds_H %>% cubelyr::as.tbl_cube(met_name = "est") %>% as_tibble
 
 preds_both <- bind_rows(preds_B_long, preds_H_long)
 preds_both$culture <- c( rep("BaYaka", nrow(preds_B_long)), rep("Hadza", nrow(preds_H_long)) )
